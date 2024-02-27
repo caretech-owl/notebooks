@@ -1,0 +1,73 @@
+[project]
+name = "cto-notebooks"
+version = "2023.02.27"
+authors = [{ name = "Alexander Neumann", email = "alexander.neumann1@hsbi.de" }]
+description = "A collection of notebooks for scientific purposes"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+
+dependencies = ["jupytext", "ipywidgets", "jupyter", "ruff", "pre-commit"]
+
+[project.optional-dependencies]
+llm = ["transformers", "datasets", "peft"]
+gguf = ["cto-notebooks[llm]", "ctransformers"]
+cas = ["dkpro-cassis"]
+gerd = ["cto-notebooks[llm,cas,gguf]"]
+
+[tool.ruff.lint]
+# 1. Enable flake8-bugbear (`B`) rules, in addition to the defaults.
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "I",    # isort (imports) styling
+    "N",    # pep8 naming checks
+    "B",    # bugbear checks
+    "ANN",  # type annotations
+    "S",    # bandid code security
+    "C",    # improve code comprehension
+    "EM",   # use recommended error message composition
+    "G",    # use recommended logging format
+    "T20",  # no print allowed
+    "PT",   # pytest styling recommendations
+    "SLF",  # prevent access to private members
+    "SIM",  # code simplification recommendations
+    "TCH",  # checks for type checking imports
+    "ARG",  # no unused arguments
+    "PERF", # performance anti pattern
+    # "FURB",  # enforces modern python
+    # "D",     # enforce documented functions [will be enabled soon]
+]
+
+# 2. Avoid enforcing line-length violations (`E501`)
+ignore = [
+    "ANN101", # do not enforce self type annotation
+    "ANN102", # do not enforce cls type annoation
+    "E402",   # notebook files may import modules on demands  
+]
+
+# 3. Fix everything except flake8-bugbear (`B`) violations.
+fixable = ["ALL"]
+unfixable = ["B"]
+
+# 4. Things to ignore
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"] # assert is fine in pytest
+# "__init__.py" = ["E402"]
+# 
+# "**/{tests,docs,tools}/*" = ["E402"]
+
+# [tool.ruff.format]
+# # 5. Use single quotes for non-triple-quoted strings.
+# quote-style = "single"
+
+[project.urls]
+Homepage = "https://github.com/caretech-owl/notebooks"
+Issues = "https://github.com/caretech-owl/notebooks/issues"
+
+[tool.setuptools]
+py-modules = []
