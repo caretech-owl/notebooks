@@ -47,7 +47,8 @@ select = [
 ignore = [
     "ANN101", # do not enforce self type annotation
     "ANN102", # do not enforce cls type annoation
-    "E402",   # notebook files may import modules on demands  
+    "E402",   # notebook files may import modules on demands
+    "T201",   # print is okay in notenbooks
 ]
 
 # 3. Fix everything except flake8-bugbear (`B`) violations.
@@ -70,4 +71,4 @@ Homepage = "https://github.com/caretech-owl/notebooks"
 Issues = "https://github.com/caretech-owl/notebooks/issues"
 
 [tool.setuptools]
-py-modules = []
+py-modules = ["cto_notebooks"]
