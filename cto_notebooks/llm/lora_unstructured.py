@@ -1,4 +1,5 @@
 # %%
+## Setup training
 from cto_notebooks.utils.config import CONFIG as SETTINGS
 from cto_notebooks.utils.lora import MODEL_CLASSES, LoraTrainingConfig, TrainingFlags
 
@@ -16,10 +17,6 @@ WANT_INTERRUPT: bool = False
 
 train_template = {}
 train_template["template_type"] = "raw_text"
-
-
-# %% [markdown]
-## Convert CAS data (texts) into dataset
 
 # %%
 # Step 1 - Load CAS data
@@ -403,3 +400,5 @@ else:
         f"Done! LoRA saved to `{lora_dir}`.\n\nBefore testing your new LoRA, make sure"
         "to first reload the model, as it is currently dirty from training."
     )
+
+# %%
