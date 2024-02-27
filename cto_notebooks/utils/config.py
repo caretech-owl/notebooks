@@ -19,6 +19,7 @@ def _init_config() -> Config:
 
     os.environ["HF_HOME"] = cache_dir.as_posix()
     os.environ["HF_HUB_CACHE"] = cache_hub_dir.as_posix()
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     return Config(cache_dir=cache_dir, model_dir=model_dir)
 
 
