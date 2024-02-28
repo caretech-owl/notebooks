@@ -35,16 +35,19 @@ def tokenize(
 ) -> Dict[str, List]:
     input_ids = encode(prompt, True, tokenizer, cutoff_len)
 
+    if tokenizer.pad_token_id is None or tokenizer.padding_side is None:
+        msg = (
+            "Tokenizing implies tokenizer.pad_token_id "
+            "and tokenizer.padding_side to be set!"
+        )
+        raise AttributeError(msg)
+
     if (
         append_eos_token
         and input_ids[-1] != tokenizer.eos_token_id
         and len(input_ids) < cutoff_len
     ):
         input_ids.append(tokenizer.eos_token_id)
-
-    # TODO: Is is reasonable to set padding(ton) token to eos_token when not set?
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token_id = tokenizer.eos_token_id
 
     input_ids = [tokenizer.pad_token_id] * (cutoff_len - len(input_ids)) + input_ids
     labels = [1] * len(input_ids)
