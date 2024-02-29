@@ -23,6 +23,7 @@ train_template["template_type"] = "dataset"
 # %%
 # Step 1 - Load CAS data
 from cto_notebooks.utils.cas import load_cas_zips
+from cto_notebooks.utils.data import despaceyfy
 
 amnt = 400
 data = load_cas_zips("/home/neum_al/data/cardio/cardiode/cas/CARDIODE400_main/", amnt)
@@ -39,22 +40,10 @@ for cas in data:
     secs = cas.select("webanno.custom.Sectionsentence")
     for i in range(len(secs)):
         if secs[i].Sectiontypes in ["Anamnese", "Zusammenfassung"]:
-            text = cas.get_sofa().sofaString[secs[i].begin : secs[i + 1].begin]
-            text = (
-                text.replace("-RRB-", ")")
-                .replace("-LRB-", "(")
-                .replace("-UNK-", "-")
-                .replace("( ", "(")
-                .replace(" )", ")")
-                .replace("  ", " ")
+            text = despaceyfy(
+                cas.get_sofa().sofaString[secs[i].begin : secs[i + 1].begin]
             )
             text = re.sub(r"<\[Pseudo\] ([^\>]+)>", r"\1", text)
-            check = re.findall(r"-(RRB|UNK|LRB)-", text)
-            if len(check) != 0:
-                msg = f"Did not expect to find {check} in\n{text}."
-                raise RuntimeError(msg)
-            # check = re.findall(r'(B|I)-(PER|SALUTE)', text)
-            # assert len(check) == 0, f"{check}\n{text}"
             training_raw_data.append(
                 {"instruction": f"{secs[i].Sectiontypes}:", "output": text}
             )
@@ -65,42 +54,13 @@ for cas in data:
 import json
 import random
 from pathlib import Path
-from typing import Dict, List
 
 import transformers
 from datasets import Dataset
 
-from cto_notebooks.utils.data import tokenize
+from cto_notebooks.utils.data import generate_and_tokenize_prompt
 
 format_data = json.loads(TRAINING_FORMAT_JSON)
-
-
-def generate_prompt(data_point: Dict[str, str]) -> str:
-    for options, data in format_data.items():
-        if set(options.split(",")) == {
-            x[0]
-            for x in data_point.items()
-            if (isinstance(x[1], str) and len(x[1].strip()) > 0)
-        }:
-            for key, val in data_point.items():
-                if isinstance(val, str):
-                    data = data.replace(f"%{key}%", val)
-            return data
-    msg = (
-        f'Data-point "{data_point}" has no keyset match '
-        'within format "{list(format_data.keys())}"'
-    )
-    raise RuntimeError(msg)
-
-
-def generate_and_tokenize_prompt(
-    data_point: Dict[str, str], tokenizer: transformers.PreTrainedTokenizer
-) -> Dict[str, List]:
-    prompt = generate_prompt(data_point)
-    return tokenize(
-        prompt, tokenizer, cutoff_len=config.cutoff_len, append_eos_token=True
-    )
-
 
 tokenizer = transformers.AutoTokenizer.from_pretrained(
     config.model["tokenizer"], trust_remote_code=False, use_fast=True
@@ -110,7 +70,13 @@ tokenizer.padding_side = "left"
 
 data = Dataset.from_list(training_raw_data)
 train_data = data.map(
-    lambda x: generate_and_tokenize_prompt(x, tokenizer),
+    lambda x: generate_and_tokenize_prompt(
+        x,
+        format_template=format_data,
+        tokenizer=tokenizer,
+        cutoff_len=config.cutoff_len,
+        append_eos_token=True,
+    ),
     new_fingerprint="%030x" % random.randrange(16**30),  # noqa: S311
 )
 

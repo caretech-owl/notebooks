@@ -30,27 +30,17 @@ if len(data) != amnt:
 # Step 2 - Remove spacey artifacts and whitespaces
 import re
 
+from cto_notebooks.utils.data import despaceyfy
+
 training_texts = []
 for cas in data:
     secs = cas.select("webanno.custom.Sectionsentence")
     for i in range(len(secs)):
         if secs[i].Sectiontypes in ["Anamnese", "Zusammenfassung"]:
-            text = cas.get_sofa().sofaString[secs[i].begin : secs[i + 1].begin]
-            text = (
-                text.replace("-RRB-", ")")
-                .replace("-LRB-", "(")
-                .replace("-UNK-", "-")
-                .replace("( ", "(")
-                .replace(" )", ")")
-                .replace("  ", " ")
+            text = despaceyfy(
+                cas.get_sofa().sofaString[secs[i].begin : secs[i + 1].begin]
             )
             text = re.sub(r"<\[Pseudo\] ([^\>]+)>", r"\1", text)
-            check = re.findall(r"-(RRB|UNK|LRB)-", text)
-            if len(check) != 0:
-                msg = f"Did not expect to find {check} in\n{text}."
-                raise RuntimeError(msg)
-            # check = re.findall(r'(B|I)-(PER|SALUTE)', text)
-            # assert len(check) == 0, f"{check}\n{text}"
             training_texts.append(text)
 
 # %%

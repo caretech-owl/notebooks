@@ -1,3 +1,4 @@
+import re
 from typing import Dict, Generator, List
 
 import torch
@@ -9,6 +10,24 @@ def split_chunks(
 ) -> Generator[List[int], None, None]:
     for i in range(0, len(arr), step):
         yield arr[i : i + size]
+
+
+def despaceyfy(text: str) -> str:
+    res = (
+        text.replace("-RRB-", ")")
+        .replace("-LRB-", "(")
+        .replace("-UNK-", "-")
+        .replace("( ", "(")
+        .replace(" )", ")")
+        .replace("  ", " ")
+    )
+    check = re.findall(r"-(RRB|UNK|LRB)-", res)
+    if len(check) != 0:
+        msg = f"Did not expect to find {check} in\n{res}."
+        raise RuntimeError(msg)
+    return res
+    # check = re.findall(r'(B|I)-(PER|SALUTE)', text)
+    # assert len(check) == 0, f"{check}\n{text}"
 
 
 def encode(
@@ -58,3 +77,32 @@ def tokenize(
         "labels": labels,
         "attention_mask": input_ids.ne(tokenizer.pad_token_id),
     }
+
+
+def generate_and_tokenize_prompt(
+    data_point: Dict[str, str],
+    format_template: Dict[str, str],
+    tokenizer: PreTrainedTokenizer,
+    cutoff_len: int,
+    append_eos_token: bool = False,
+) -> Dict[str, List]:
+    for options, prompt in format_template.items():
+        if set(options.split(",")) == {
+            x[0]
+            for x in data_point.items()
+            if (isinstance(x[1], str) and len(x[1].strip()) > 0)
+        }:
+            for key, val in data_point.items():
+                if isinstance(val, str):
+                    prompt = prompt.replace(f"%{key}%", val)
+            return tokenize(
+                prompt,
+                tokenizer,
+                cutoff_len=cutoff_len,
+                append_eos_token=append_eos_token,
+            )
+    msg = (
+        f'Data-point "{data_point}" has no keyset match '
+        'within format "{list(format_data.keys())}"'
+    )
+    raise RuntimeError(msg)
