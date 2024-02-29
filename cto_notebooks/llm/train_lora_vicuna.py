@@ -10,7 +10,6 @@ config = LoraTrainingConfig(
     },
     output_dir=SETTINGS.cache_dir.joinpath("lora").as_posix(),
     # flags=TrainingFlags(use_cpu=True)
-    modules=LoraModules(default=False, q=True, v=True),
     cutoff_len=512,
 )
 

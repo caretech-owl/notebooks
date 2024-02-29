@@ -23,7 +23,7 @@ class LoraModules:
     gate: Optional[bool] = None
     down: Optional[bool] = None
     up: Optional[bool] = None
-    default: bool = False
+    default: bool = True
 
     def target_modules(self, model: LLMModelProto) -> List[str]:
         avail = find_target_modules(model)
