@@ -1,21 +1,24 @@
 # %%
 from cto_notebooks.utils.config import CONFIG
 
-# local model
+# model from huggingface
 MODEL_CONFIG = {
-    "model_path_or_repo_id": CONFIG.model_dir.joinpath(
-        "em_german_leo_mistral_lora_cardiode_Q5_K_M.gguf"
-    ).as_posix(),
+    "model_path_or_repo_id": "TheBloke/em_german_leo_mistral-GGUF",
+    "model_file": "em_german_leo_mistral.Q5_K_M.gguf",
+    "model_type": "mistral",
     "max_new_tokens": 1024,
     "context_length": 2048,
 }
 
-# model from huggingface
+# # local model
 # MODEL_CONFIG = {
-#     "model_path_or_repo_id": "TheBloke/em_german_leo_mistral-GGUF",
-#     "model_file": "em_german_leo_mistral.Q5_K_M.gguf",
-#     "model_type": "mistral",
+#     "model_path_or_repo_id": CONFIG.model_dir.joinpath(
+#         "em_german_leo_mistral_lora_cardiode_Q5_K_M.gguf"
+#     ).as_posix(),
+#     "max_new_tokens": 1024,
+#     "context_length": 2048,
 # }
+
 
 # %%
 from ctransformers import AutoModelForCausalLM
