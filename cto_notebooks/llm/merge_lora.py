@@ -1,16 +1,22 @@
 # %%
-# Setup inference
+# Setup source and target paths
 
 # model from huggingface
 # see 'run_gguf.py' for local model
 MODEL_CONFIG = {
     "pretrained_model_name_or_path": "jphme/em_german_leo_mistral",
 }
+MODEL_PATH = CONFIG.model_dir.joinpath("em_german_leo_mistral_lora_cardiode")
+
 # %%
-# Step 1 - Load model
-from transformers import AutoModelForCausalLM
+# Step 1 - Load model and tokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model = AutoModelForCausalLM.from_pretrained(**MODEL_CONFIG)
+tokenizer = AutoTokenizer.from_pretrained(**MODEL_CONFIG)
+# this should match your training padding options
+tokenizer.pad_token_id = 0
+tokenizer.padding_side = "left"
 # %%
 # Step 2 - Merge model and LoRA
 from peft import PeftModel
@@ -22,22 +28,19 @@ merged_model = PeftModel.from_pretrained(
 ).merge_and_unload()
 
 # %%
-# Step 3 - Update model config
+# Step 3 - Save model to disk
 
-merged_model.config.pad_token_id = 0
-merged_model.config.padding_side = "left"
-
-# %%
-# Step 4 - Save to disk
-
-model_path = CONFIG.model_dir.joinpath("em_german_leo_mistral_lora_cardiode")
-if model_path.exists():
+if MODEL_PATH.exists():
     msg = (
-        f"Model target path {model_path} already exists! Change your model's name "
+        f"Model target path {MODEL_PATH} already exists! Change your model's name "
         "or remove the previously saved model and try again."
     )
     raise RuntimeError(msg)
 
-merged_model.save_pretrained(model_path)
+merged_model.save_pretrained(MODEL_PATH)
+
+# %% Step 4 - Save tokenizer config
+
+tokenizer.save_pretrained(MODEL_PATH)
 
 # %%
