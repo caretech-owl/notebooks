@@ -17,7 +17,13 @@ dependencies = ["jupytext", "ipywidgets", "jupyter", "ruff", "pre-commit"]
 llm = ["transformers", "datasets", "peft", "accelerate"]
 gguf = ["cto-notebooks[llm]", "ctransformers"]
 cas = ["dkpro-cassis"]
-gerd = ["cto-notebooks[llm,cas,gguf]"]
+gerd = [
+    "cto-notebooks[llm,cas,gguf]",
+    "langchain",
+    "pydantic",
+    "sentence-transformers",
+    "faiss-cpu",
+]
 
 [tool.ruff.lint]
 # 1. Enable flake8-bugbear (`B`) rules, in addition to the defaults.
