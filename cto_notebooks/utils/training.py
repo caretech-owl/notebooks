@@ -3,14 +3,14 @@ import math
 import sys
 import threading
 from dataclasses import asdict, dataclass, field
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Dict, List, Optional, Type
 
 import torch
 import transformers
 from datasets import Dataset
 from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 
-from cto_notebooks.utils.lora import MODEL_CLASSES, LLMModelProto, LoraTrainingConfig
+from cto_notebooks.utils.lora import MODEL_CLASSES, LoraTrainingConfig
 
 
 @dataclass
