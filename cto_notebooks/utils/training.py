@@ -114,6 +114,7 @@ class Trainer:
             lora_dropout=config.lora_dropout,
             bias=config.bias,
             task_type=config.task_type,
+            r=config.r,
         )
 
         self.base_model = model

@@ -57,6 +57,7 @@ class LoraTrainingConfig:
     save_steps: int = 500  # Save every n steps
     warmup_steps: int = 100
     epochs: int = 3
+    r: int = 8
     bias: str = "none"
     task_type: str = "CAUSAL_LM"
 
