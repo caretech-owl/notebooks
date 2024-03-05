@@ -1,12 +1,16 @@
 # %%
 # Setup source and target paths
 
+from cto_notebooks.utils.config import CONFIG
+
 # model from huggingface
 # see 'run_gguf.py' for local model
 MODEL_CONFIG = {
     "pretrained_model_name_or_path": "jphme/em_german_leo_mistral",
 }
-MODEL_PATH = CONFIG.model_dir.joinpath("em_german_leo_mistral_lora_cardiode")
+# MODEL_CONFIG = {"pretrained_model_name_or_path": "LeoLM/leo-hessianai-7b-chat"}
+
+MODEL_PATH = CONFIG.model_dir.joinpath("em_german_leo_mistral_grascco_qa")
 
 # %%
 # Step 1 - Load model and tokenizer
@@ -16,7 +20,7 @@ model = AutoModelForCausalLM.from_pretrained(**MODEL_CONFIG)
 tokenizer = AutoTokenizer.from_pretrained(**MODEL_CONFIG)
 # this should match your training padding options
 tokenizer.pad_token_id = 0
-tokenizer.padding_side = "left"
+# tokenizer.padding_side = "left"
 # %%
 # Step 2 - Merge model and LoRA
 from peft import PeftModel
@@ -37,10 +41,11 @@ if MODEL_PATH.exists():
     )
     raise RuntimeError(msg)
 
-merged_model.save_pretrained(MODEL_PATH)
+merged_model.save_pretrained(MODEL_PATH, safe_serialization=True)
 
-# %% Step 4 - Save tokenizer config
+# %%
+# Step 4 - Save tokenizer config
 
-tokenizer.save_pretrained(MODEL_PATH)
+_ = tokenizer.save_pretrained(MODEL_PATH)
 
 # %%
