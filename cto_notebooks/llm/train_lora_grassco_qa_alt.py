@@ -12,15 +12,20 @@ label_filepath = data_dir.joinpath("grascco.json")
 exclude_from_training = ["Cajal.txt", "Boeck.txt", "Baastrup.txt"]
 
 config = LoraTrainingConfig(
+    # model={
+    #     "tokenizer": "LeoLM/leo-hessianai-7b-chat",
+    #     "config": {"pretrained_model_name_or_path": "LeoLM/leo-hessianai-7b-chat"},
+    # },
     model={
-        "tokenizer": "LeoLM/leo-hessianai-7b-chat",
-        "config": {"pretrained_model_name_or_path": "LeoLM/leo-hessianai-7b-chat"},
+        "tokenizer": "jphme/em_german_leo_mistral",
+        "config": {"pretrained_model_name_or_path": "jphme/em_german_leo_mistral"},
     },
     batch_size=4,
     micro_batch_size=1,
     stop_at_loss=-1,
+    epochs=1,
     output_dir=SETTINGS.cache_dir.joinpath("lora").as_posix(),
-    modules=LoraModules(default=False, q=True, v=True),
+    # modules=LoraModules(default=False, q=True, v=True),
     # flags=TrainingFlags(use_cpu=True)
 )
 
@@ -345,7 +350,7 @@ def tokenizer_worker(args: List) -> List[Dict[str, List]]:
         **config.model["config"], trust_remote_code=False
     )
     tokenizer.pad_token_id = 0
-    tokenizer.padding_side = "left"
+    # tokenizer.padding_side = "left"
     tokenized = [tokenizer(s["instruct"]) for s in samples]
     if tokenized:
         data = Dataset.from_list(tokenized)
@@ -390,7 +395,7 @@ tokenizer = AutoTokenizer.from_pretrained(
     **config.model["config"], trust_remote_code=False
 )
 tokenizer.pad_token_id = 0
-tokenizer.padding_side = "left"
+# tokenizer.padding_side = "left"
 
 decoded_entries = []
 for i in range(min(10, len(train_data))):
@@ -423,7 +428,7 @@ trainer.setup_training(
 
 print(f"Going to train modules: {', '.join(config.modules.target_modules(model))}")
 # %%
-## Step 6 - Run Trainer
+# Step 6 - Run Trainer
 import time
 
 if Path(config.output_dir).joinpath("adapter_model.safetensors").exists():
