@@ -6,7 +6,7 @@ from typing import List
 from cto_notebooks.utils.config import CONFIG
 
 LLAMA_DIR = CONFIG.cache_dir.joinpath("llama_cpp")
-MODEL_PATH = CONFIG.model_dir.joinpath("em_german_leo_mistral_lora_cardiode")
+MODEL_PATH = CONFIG.model_dir.joinpath("em_german_leo_mistral_grascco_qa")
 GGUF_PATH = MODEL_PATH.as_posix() + ".gguf"
 QUANTIZATION = "Q5_K_M"
 QUANTIZED_PATH = GGUF_PATH.replace(".gguf", f"_{QUANTIZATION}.gguf")
@@ -48,6 +48,7 @@ call(
         MODEL_PATH,
         "--outtype",
         "f32",
+        # "--pad-vocab",
         "--vocab-type",
         "hfft",
         "--outfile",
