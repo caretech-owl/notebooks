@@ -30,14 +30,14 @@ if len(data) != amnt:
 # Step 2 - Remove spacey artifacts and whitespaces
 import re
 
-from cto_notebooks.utils.data import despaceyfy
+from cto_notebooks.utils.data import despacyfy
 
 training_texts = []
 for cas in data:
     secs = cas.select("webanno.custom.Sectionsentence")
     for i in range(len(secs)):
         if secs[i].Sectiontypes in ["Anamnese", "Zusammenfassung"]:
-            text = despaceyfy(
+            text = despacyfy(
                 cas.get_sofa().sofaString[secs[i].begin : secs[i + 1].begin]
             )
             text = re.sub(r"<\[Pseudo\] ([^\>]+)>", r"\1", text)

@@ -22,7 +22,7 @@ train_template["template_type"] = "dataset"
 # %%
 # Step 1 - Load CAS data
 from cto_notebooks.utils.cas import load_cas_zips
-from cto_notebooks.utils.data import despaceyfy
+from cto_notebooks.utils.data import despacyfy
 
 amnt = 400
 data = load_cas_zips("/home/neum_al/data/cardio/cardiode/cas/CARDIODE400_main/", amnt)
@@ -39,7 +39,7 @@ for cas in data:
     secs = cas.select("webanno.custom.Sectionsentence")
     for i in range(len(secs)):
         if secs[i].Sectiontypes in ["Anamnese", "Zusammenfassung"]:
-            text = despaceyfy(
+            text = despacyfy(
                 cas.get_sofa().sofaString[secs[i].begin : secs[i + 1].begin]
             )
             text = re.sub(r"<\[Pseudo\] ([^\>]+)>", r"\1", text)
