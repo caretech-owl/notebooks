@@ -118,6 +118,16 @@ class Trainer:
         )
 
         self.base_model = model
+        for param in self.base_model.parameters():
+            if param.requires_grad:
+                param.data = param.data.float()
+        if (
+            not hasattr(self.base_model, "lm_head")
+            or hasattr(self.base_model.lm_head, "weight")
+        ) and "quantization_config" in self.base_model.config.to_dict():
+            self.base_model = prepare_model_for_kbit_training(self.base_model)
+            print("Quantization detected!")
+
         self.lora_model = get_peft_model(model, training_config)
         self.lora_model.config.use_cache = False
 
@@ -220,15 +230,6 @@ class Trainer:
         tokenizer: transformers.PreTrainedTokenizer,
         torch_compile: bool = False,
     ) -> None:
-        for param in self.base_model.parameters():
-            if param.requires_grad:
-                param.data = param.data.float()
-        if (
-            not hasattr(self.base_model, "lm_head")
-            or hasattr(self.base_model.lm_head, "weight")
-        ) and "quantization_config" in self.base_model.config.to_dict():
-            prepare_model_for_kbit_training(self.base_model)
-
         self.trainer = transformers.Trainer(
             model=self.lora_model,
             train_dataset=train_data,
