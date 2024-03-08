@@ -16,7 +16,7 @@ dependencies = ["jupytext", "ipywidgets", "jupyter", "ruff", "pre-commit"]
 [project.optional-dependencies]
 llm = ["transformers", "datasets", "peft", "accelerate"]
 gguf = ["cto-notebooks[llm]", "ctransformers"]
-cas = ["dkpro-cassis"]
+cas = ["dkpro-cassis", "faker"]
 gerd = [
     "cto-notebooks[llm,cas,gguf]",
     "langchain",
