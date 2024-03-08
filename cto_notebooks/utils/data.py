@@ -12,11 +12,11 @@ def split_chunks(
         yield arr[i : i + size]
 
 
-def despaceyfy(text: str) -> str:
+def despacyfy(text: str) -> str:
     res = (
         text.replace("-RRB-", ")")
         .replace("-LRB-", "(")
-        .replace("-UNK-", "-")
+        .replace("-UNK-", "*")
         .replace("( ", "(")
         .replace(" )", ")")
         .replace("  ", " ")
