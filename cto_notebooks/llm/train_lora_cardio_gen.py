@@ -101,7 +101,7 @@ Wir danken für die vertrauensvolle Zusammenarbeit und stehen bei Rückfragen se
 
 Mit freundlichen Grüßen
 {attending_doctor}
-Assistenzarzt
+Assistenzarzt\
 """  # noqa: E501
 
 # %%
@@ -171,7 +171,9 @@ tokenizer = AutoTokenizer.from_pretrained(
 )
 tokenizer.pad_token_id = 0
 
-train_data = Dataset.from_list([tokenizer(fill_template(entry)) for entry in filtered])
+train_data = Dataset.from_list(
+    [tokenizer(fill_template(entry) + tokenizer.eos_token) for entry in filtered]
+)
 
 # %%
 # Save sample training data
