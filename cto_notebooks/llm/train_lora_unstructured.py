@@ -18,10 +18,14 @@ train_template["template_type"] = "raw_text"
 
 # %%
 # Step 1 - Load CAS data
+import os
+
 from cto_notebooks.utils.cas import load_cas_zips
 
 amnt = 400
-data = load_cas_zips("/home/neum_al/data/cardio/cardiode/cas/CARDIODE400_main/", amnt)
+data = load_cas_zips(
+    f"{os.environ['DATA_PATH']}/cardiode/cardiode/cas/CARDIODE400_main/", amnt
+)
 if len(data) != amnt:
     msg = f"Expected to load {amnt} files but only got {len(data)}."
     raise RuntimeError(msg)
