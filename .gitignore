@@ -1,8 +1,9 @@
-logs
-lora
-cache
-models
-data
+/logs
+/cache
+/models
+/data
 *.ipynb
 *.pyc
 *.egg-info
+.ruff_cache
+*.pkl
