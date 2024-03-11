@@ -247,23 +247,23 @@ def _create_train_prompt(document: str, target: str) -> str:
 
     for perm_patient_name in permutations(questions_dict[questions[0]]):
         parameters["context0"] = " ".join(perm_patient_name)
-        parameters["question0"] = question
+        parameters["question0"] = questions[0]
         parameters["field0"] = fields[questions[0]]
         for perm_patient_date_of_birth in permutations(questions_dict[questions[1]]):
             parameters["context1"] = " ".join(perm_patient_date_of_birth)
-            parameters["question1"] = question
+            parameters["question1"] = questions[1]
             parameters["field1"] = fields[questions[1]]
             for perm_attending_doctor in permutations(questions_dict[questions[2]]):
                 parameters["context2"] = " ".join(perm_attending_doctor)
-                parameters["question2"] = question
+                parameters["question2"] = questions[2]
                 parameters["field2"] = fields[questions[2]]
                 for perm_recording_date in permutations(questions_dict[questions[3]]):
                     parameters["context3"] = " ".join(perm_recording_date)
-                    parameters["question3"] = question
+                    parameters["question3"] = questions[3]
                     parameters["field3"] = fields[questions[3]]
                     for perm_release_date in permutations(questions_dict[questions[4]]):
                         parameters["context4"] = " ".join(perm_release_date)
-                        parameters["question4"] = question
+                        parameters["question4"] = questions[4]
                         parameters["field4"] = fields[questions[4]]
 
                         prompt_list.append(qa_analyze_prompt.format(**parameters))
