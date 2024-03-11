@@ -25,7 +25,7 @@ config = LoraTrainingConfig(
     stop_at_loss=-1,
     epochs=1,
     output_dir=SETTINGS.cache_dir.joinpath("lora").as_posix(),
-    # modules=LoraModules(default=False, q=True, v=True),
+    modules=LoraModules(default=False, q=True, v=True),
     # flags=TrainingFlags(use_cpu=True)
 )
 
@@ -46,7 +46,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 # VectorStore
 chunk_size = 256
 chunk_overlap = 25
-vector_count = 2
+vector_count = 3
 vector_model_name = "sentence-transformers/all-MiniLM-L6-v2"
 _embeddings = HuggingFaceEmbeddings(
     model_name=vector_model_name,
@@ -56,7 +56,7 @@ _embeddings = HuggingFaceEmbeddings(
 # %%
 # Setup prompt
 
-qa_analyze_prompt = """user
+qa_analyze_prompt = """<s>Du bist ein hilfreicher Assistent. USER: \
 Kontext1: {context0} zu
 Frage1: {question0} in JSON-Feld {field0}.
 Kontext2: {context1} zu
@@ -68,10 +68,9 @@ Frage4: {question3} in JSON-Feld {field3}.
 Kontext5: {context4} zu
 Frage5: {question4} in JSON-Feld {field4}.
 
-Gebe nur die hilfreichen Antworten unten zurück und nichts anderes. Halte dich außerdem sehr kurz mit der Antwort.
-Hilfreiche Antwort:<|im_end|>
-<|im_start|>assistant
-{target}<|im_end|>"""  # noqa: E501
+Gebe nur die hilfreichen Antworten unten zurück und nichts anderes. \
+Halte dich außerdem sehr kurz mit der Antwort. \
+ASSISTANT:{target}</s>"""  # noqa: E501
 # %%
 # File type defintions
 from enum import Enum
@@ -246,7 +245,9 @@ def _create_train_prompt(document: str, target: str) -> str:
     for question in questions:
         questions_dict[question] = [
             doc.page_content
-            for doc in _vectorstore.search(question, search_type="similarity", k=2)
+            for doc in _vectorstore.search(
+                question, search_type="similarity", k=vector_count
+            )
         ]
 
     for perm_patient_name in permutations(questions_dict[questions[0]]):
@@ -350,8 +351,7 @@ def tokenizer_worker(args: List) -> List[Dict[str, List]]:
         **config.model["config"], trust_remote_code=False
     )
     tokenizer.pad_token_id = 0
-    # tokenizer.padding_side = "left"
-    tokenized = [tokenizer(s["instruct"]) for s in samples]
+    tokenized = [tokenizer(s["instruct"], add_special_tokens=False) for s in samples]
     if tokenized:
         data = Dataset.from_list(tokenized)
         data.save_to_disk(f"{train_data_folder}/samples-{start}-{start+len(samples)-1}")
