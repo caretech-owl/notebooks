@@ -125,9 +125,9 @@ raw_data_folder = data_dir.joinpath("raw")
 label_filepath = data_dir.joinpath("grascco.json")
 
 chunk_size = 256
-chunk_overlap = 25
+chunk_overlap = 26
 vector_count = 3
-vector_model_name = "sentence-transformers/all-MiniLM-L6-v2"
+vector_model_name = "sentence-transformers/distiluse-base-multilingual-cased-v1"
 _embeddings = HuggingFaceEmbeddings(
     model_name=vector_model_name,
     model_kwargs={"device": "cpu"},
@@ -160,7 +160,7 @@ for task in label_file:
     file_name = task.file_name
     for annotation in task.annotations:
         with open(
-            raw_data_folder.joinpath(file_name), encoding="utf-8"
+            raw_data_folder.joinpath(file_name), encoding="utf-8-sig"
         ) as document_file:
             document = document_file.read()
 
@@ -179,7 +179,7 @@ for task in label_file:
             value = document[start:end]
             if label.name in fields:
                 json_dict[fields[str(label.name)]] = value
-
+        # print(json_dict["patient_name"])
         vectorstore = FAISS.from_texts(text_splitter.split_text(document), _embeddings)
         tests[file_name] = (json_dict, vectorstore)
 
@@ -187,34 +187,46 @@ for task in label_file:
 # Define tests for accuracy
 
 from collections import Counter
+from typing import Dict, List, Union
 
 
-def collect_res(question: str, field: str) -> Dict[str, int]:
+def collect_res(
+    question: Union[str, List[float]], field: str, k: int
+) -> Dict[str, int]:
     res = {}
     for file_name, (dict, store) in tests.items():
         target_value = dict[field]
         if not target_value:
             continue
         for rank, doc in enumerate(
-            store.search(question, search_type="similarity", k=vector_count), 1
+            store.search(question, search_type="similarity", k=k)
+            if isinstance(question, str)
+            else store.similarity_search_by_vector(
+                question, search_type="similarity", k=k
+            ),
+            1,
         ):
             if target_value in doc.page_content:
                 res[file_name] = rank
                 break
         else:
+            # print(file_name)
             res[file_name] = 0
     return res
 
 
-def benchmark_test(question: str, field: str) -> None:
+def benchmark_test(question: Union[str, List[float]], field: str, k: int = 3) -> None:
     print("-" * 30)
-    print(f"Frage: {question}")
-    res = collect_res(question, field)
+    if isinstance(question, str):
+        print(f"Frage: {question}")
+    else:
+        print("Frage: Vector")
+    res = collect_res(question, field, k)
     n = len(res)
     counter = Counter(res.values())
     print(f"Sample size: {n}")
     print(f"Miss: {counter[0] / n * 100:.2f}")
-    for i in range(1, vector_count + 1):
+    for i in range(1, k + 1):
         print(f"Match Vector {i}: {counter[i] / n * 100:.2f}")
     print(f"Total hits: {(n - counter[0]) / n * 100:.2f}")
 
@@ -224,5 +236,41 @@ def benchmark_test(question: str, field: str) -> None:
 benchmark_test("Wie heißt der Patient?", "patient_name")
 benchmark_test("Patient?", "patient_name")
 benchmark_test("Patient, wh., geboren", "patient_name")
+
+
+# %%
+def average_vector(field: str) -> List[float]:
+    vecs = []
+    for dict, store in tests.values():
+        for vec in store.search(
+            f"wir berichten über unseren gemeinsamen Patienten {dict[field]}",
+            search_type="similarity",
+            k=10,
+        ):
+            if dict[field] not in vec.page_content:
+                # print(
+                #     f"Field value: {dict[field]} not in page content: {vec.page_content}"
+                # )
+                continue
+            # print(vec.page_content)
+            vecs.append(_embeddings.embed_query(vec.page_content))
+            break
+        # else:
+        #     msg = f"Field value: {dict[field]} not in document {file_name}."
+        #     raise ValueError(msg)
+        _embeddings.embed_query(vec.page_content)
+    return numpy.mean(vecs, axis=0)
+
+
+# %%
+import numpy
+
+m_vec = average_vector("patient_name")
+benchmark_test(m_vec, "patient_name", 3)
+
+# %%
+
+m_vec = average_vector("attending_doctor")
+benchmark_test(m_vec, "attending_doctor", 3)
 
 # %%
