@@ -274,3 +274,94 @@ m_vec = average_vector("attending_doctor")
 benchmark_test(m_vec, "attending_doctor", 3)
 
 # %%
+class benchmark_result:
+    question: str
+    sample_size: float
+    miss: float
+    vector_matches : List[float]
+    total_hits: float
+
+def benchmark_tests(questionList: List[str], field: str, num_show_first: int = 0, k: int = 3) -> None:
+    benchmark_results : List[benchmark_result] = []
+    for question in questionList:
+        benchmark_re = benchmark_result()
+        benchmark_re.vector_matches = []
+        benchmark_re.question = question
+        res = collect_res(question, field, k)
+        benchmark_re.sample_size = len(res)
+        counter = Counter(res.values())
+
+        benchmark_re.miss = counter[0] / benchmark_re.sample_size * 100
+        for i in range(1, k + 1):
+            benchmark_re.vector_matches.append(counter[i] / benchmark_re.sample_size * 100)
+        benchmark_re.total_hits = (benchmark_re.sample_size - counter[0]) / benchmark_re.sample_size * 100
+
+        benchmark_results.append(benchmark_re)
+
+    # sort
+    benchmark_results = sorted(benchmark_results, key=lambda res: res.total_hits, reverse=True)
+    
+    # print
+    if num_show_first == 0 or num_show_first > len(benchmark_results):
+        num_show_first = len(benchmark_results)
+
+    for i in range(0, num_show_first):
+        bench_re = benchmark_results[i]
+        print("-" * 30)
+        print(f"Frage: {bench_re.question}")
+    
+        print(f"Sample size: {bench_re.sample_size}")
+        print(f"Miss: {bench_re.miss:.2f}")
+        for i in range(0, len(bench_re.vector_matches)):
+            print(f"Match Vector {i + 1}: {bench_re.vector_matches[i]:.2f}")
+        print(f"Total hits: {bench_re.total_hits:.2f}")
+    print("-" * 30)
+    
+
+# %%
+# patient_name
+questions: List[str] = ["Wie heißt der Patient?",
+                        "Patient?", 
+                        "Patientname?", 
+                        "Patient of patient?",
+                        "Patientennamen?", 
+                        "Patient, wh., geboren",
+                        "Patient, wh., geboren, ?"]
+benchmark_tests(questions, "patient_name", 4)
+
+# %%
+# patient_date_of_birth
+questions: List[str] = ["Patient, wh., geboren",
+                        "Patient, wh., geboren, ?",
+                        "Wann ist der Patient geboren?",
+                        "Patient Geburtstag", 
+                        "Patient Geburtstag?",
+                        "Patient, born",
+                        "Patient, born?"]
+benchmark_tests(questions, "patient_date_of_birth", 4)
+
+# %%
+# recording_date
+questions: List[str] = ["Wann ist der Patient gegangen?", 
+                        "Wann wurde der Patient bei uns entlassen?"]
+benchmark_tests(questions, "recording_date", 4)
+
+# %%
+# release_date
+questions: List[str] = ["Wann ist der Patient gekommen?",
+                        "Wann wurde der Patient bei uns aufgenommen?"]
+benchmark_tests(questions, "release_date", 4)
+
+# %%
+# attending_doctor
+questions: List[str] = ["Wie heißt der behandelnde Arzt?", 
+                        "Arzt",
+                        "Was ist der Name des behandelnden Arztes?",
+                        "Grüßen , Prof, Dr",
+                        "Grüßen",
+                        "Grüße , Prof, Dr",
+                        "Mit freundlichen kollegialen Grüßen, Prof, Dr",
+                        "Mit freundlichen kollegialen Grüßen",
+                        "Mit freundlichen Grüßen, Prof, Dr",
+                        "Mit freundlichen Grüßen"]
+benchmark_tests(questions, "attending_doctor", 4)
