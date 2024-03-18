@@ -326,7 +326,15 @@ questions: List[str] = ["Wie heißt der Patient?",
                         "Patient of patient?",
                         "Patientennamen?", 
                         "Patient, wh., geboren",
-                        "Patient, wh., geboren, ?"]
+                        "Patient, wh., geboren, ?",
+                        "wir berichten über unseren Patient, Btr.",
+                        "wir berichten über unseren Patient",
+                        "wir berichten über",
+                        "wir berichten über unseren Patient oder Btr.",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
+                        "Patient, * 0.00.0000,"]
 benchmark_tests(questions, "patient_name", 4)
 
 # %%
@@ -337,23 +345,39 @@ questions: List[str] = ["Patient, wh., geboren",
                         "Patient Geburtstag", 
                         "Patient Geburtstag?",
                         "Patient, born",
-                        "Patient, born?"]
+                        "Patient, born?",
+                        "wir berichten über unseren Patient oder Btr.",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
+                       ]
 benchmark_tests(questions, "patient_date_of_birth", 4)
 
+
 # %%
-# recording_date
+# recording_date 
 questions: List[str] = ["Wann ist der Patient gegangen?", 
-                        "Wann wurde der Patient bei uns entlassen?"]
+                        "Wann wurde der Patient bei uns entlassen?",
+                        "wir berichten über unseren Patient oder Btr.",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
+                      ]
 benchmark_tests(questions, "recording_date", 4)
 
 # %%
 # release_date
 questions: List[str] = ["Wann ist der Patient gekommen?",
-                        "Wann wurde der Patient bei uns aufgenommen?"]
+                        "Wann wurde der Patient bei uns aufgenommen?",
+                        "wir berichten über unseren Patient oder Btr.",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
+                      ]
 benchmark_tests(questions, "release_date", 4)
 
 # %%
-# attending_doctor
+# attending_doctor 
 questions: List[str] = ["Wie heißt der behandelnde Arzt?", 
                         "Arzt",
                         "Was ist der Name des behandelnden Arztes?",
