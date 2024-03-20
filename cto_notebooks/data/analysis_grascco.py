@@ -224,11 +224,12 @@ def benchmark_test(question: Union[str, List[float]], field: str, k: int = 3) ->
     res = collect_res(question, field, k)
     n = len(res)
     counter = Counter(res.values())
+    misses = counter[0] / n * 100
     print(f"Sample size: {n}")
-    print(f"Miss: {counter[0] / n * 100:.2f}")
+    print(f"Miss: {misses:.2f}")
     for i in range(1, k + 1):
         print(f"Match Vector {i}: {counter[i] / n * 100:.2f}")
-    print(f"Total hits: {(n - counter[0]) / n * 100:.2f}")
+    print(f"Total hits: {100 - misses:.2f}")
 
 
 # %%
@@ -248,9 +249,6 @@ def average_vector(field: str) -> List[float]:
             k=10,
         ):
             if dict[field] not in vec.page_content:
-                # print(
-                #     f"Field value: {dict[field]} not in page content: {vec.page_content}"
-                # )
                 continue
             # print(vec.page_content)
             vecs.append(_embeddings.embed_query(vec.page_content))
@@ -263,44 +261,55 @@ def average_vector(field: str) -> List[float]:
 
 
 # %%
+# Calcalate and test average vector for patient_name
 import numpy
 
 m_vec = average_vector("patient_name")
 benchmark_test(m_vec, "patient_name", 3)
 
 # %%
-
+# Calculate and test average vector for attending_doctor
 m_vec = average_vector("attending_doctor")
 benchmark_test(m_vec, "attending_doctor", 3)
 
 # %%
-class benchmark_result:
+# Define batch benchmark ranking tests
+from dataclasses import dataclass
+
+
+@dataclass
+class BenchmarkResult:
     question: str
     sample_size: float
     miss: float
-    vector_matches : List[float]
-    total_hits: float
+    vector_matches: List[float]
 
-def benchmark_tests(questionList: List[str], field: str, num_show_first: int = 0, k: int = 3) -> None:
-    benchmark_results : List[benchmark_result] = []
-    for question in questionList:
-        benchmark_re = benchmark_result()
-        benchmark_re.vector_matches = []
-        benchmark_re.question = question
+    @property
+    def total_hits(self) -> float:
+        return 100 - self.miss
+
+
+def benchmark_tests(
+    question_list: List[str], field: str, num_show_first: int = 0, k: int = 3
+) -> None:
+    benchmark_results: List[BenchmarkResult] = []
+    for question in question_list:
         res = collect_res(question, field, k)
-        benchmark_re.sample_size = len(res)
         counter = Counter(res.values())
-
-        benchmark_re.miss = counter[0] / benchmark_re.sample_size * 100
-        for i in range(1, k + 1):
-            benchmark_re.vector_matches.append(counter[i] / benchmark_re.sample_size * 100)
-        benchmark_re.total_hits = (benchmark_re.sample_size - counter[0]) / benchmark_re.sample_size * 100
-
+        size = len(res)
+        benchmark_re = BenchmarkResult(
+            question=question,
+            sample_size=size,
+            miss=counter[0] / size * 100,
+            vector_matches=[counter[i] / size * 100 for i in range(1, k + 1)],
+        )
         benchmark_results.append(benchmark_re)
 
     # sort
-    benchmark_results = sorted(benchmark_results, key=lambda res: res.total_hits, reverse=True)
-    
+    benchmark_results = sorted(
+        benchmark_results, key=lambda res: res.total_hits, reverse=True
+    )
+
     # print
     if num_show_first == 0 or num_show_first > len(benchmark_results):
         num_show_first = len(benchmark_results)
@@ -309,83 +318,90 @@ def benchmark_tests(questionList: List[str], field: str, num_show_first: int = 0
         bench_re = benchmark_results[i]
         print("-" * 30)
         print(f"Frage: {bench_re.question}")
-    
+
         print(f"Sample size: {bench_re.sample_size}")
         print(f"Miss: {bench_re.miss:.2f}")
         for i in range(0, len(bench_re.vector_matches)):
             print(f"Match Vector {i + 1}: {bench_re.vector_matches[i]:.2f}")
         print(f"Total hits: {bench_re.total_hits:.2f}")
     print("-" * 30)
-    
+
 
 # %%
 # patient_name
-questions: List[str] = ["Wie heißt der Patient?",
-                        "Patient?", 
-                        "Patientname?", 
-                        "Patient of patient?",
-                        "Patientennamen?", 
-                        "Patient, wh., geboren",
-                        "Patient, wh., geboren, ?",
-                        "wir berichten über unseren Patient, Btr.",
-                        "wir berichten über unseren Patient",
-                        "wir berichten über",
-                        "wir berichten über unseren Patient oder Btr.",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
-                        "Patient, * 0.00.0000,"]
+questions: List[str] = [
+    "Wie heißt der Patient?",
+    "Patient?",
+    "Patientname?",
+    "Patient of patient?",
+    "Patientennamen?",
+    "Patient, wh., geboren",
+    "Patient, wh., geboren, ?",
+    "wir berichten über unseren Patient, Btr.",
+    "wir berichten über unseren Patient",
+    "wir berichten über",
+    "wir berichten über unseren Patient oder Btr.",
+    "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",  # noqa: E501
+    "Patient, * 0.00.0000,",
+]
 benchmark_tests(questions, "patient_name", 4)
 
 # %%
-# patient_date_of_birth
-questions: List[str] = ["Patient, wh., geboren",
-                        "Patient, wh., geboren, ?",
-                        "Wann ist der Patient geboren?",
-                        "Patient Geburtstag", 
-                        "Patient Geburtstag?",
-                        "Patient, born",
-                        "Patient, born?",
-                        "wir berichten über unseren Patient oder Btr.",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
-                       ]
+# Test questions for patient_date_of_birth
+questions: List[str] = [
+    "Patient, wh., geboren",
+    "Patient, wh., geboren, ?",
+    "Wann ist der Patient geboren?",
+    "Patient Geburtstag",
+    "Patient Geburtstag?",
+    "Patient, born",
+    "Patient, born?",
+    "wir berichten über unseren Patient oder Btr.",
+    "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",  # noqa: E501
+]
 benchmark_tests(questions, "patient_date_of_birth", 4)
 
 
 # %%
-# recording_date 
-questions: List[str] = ["Wann ist der Patient gegangen?", 
-                        "Wann wurde der Patient bei uns entlassen?",
-                        "wir berichten über unseren Patient oder Btr.",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
-                      ]
+# Test questions for recording_date
+questions: List[str] = [
+    "Wann ist der Patient gegangen?",
+    "Wann wurde der Patient bei uns entlassen?",
+    "wir berichten über unseren Patient oder Btr.",
+    "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",  # noqa: E501
+]
 benchmark_tests(questions, "recording_date", 4)
 
 # %%
-# release_date
-questions: List[str] = ["Wann ist der Patient gekommen?",
-                        "Wann wurde der Patient bei uns aufgenommen?",
-                        "wir berichten über unseren Patient oder Btr.",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
-                        "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",
-                      ]
+# Test questions for release_date
+questions: List[str] = [
+    "Wann ist der Patient gekommen?",
+    "Wann wurde der Patient bei uns aufgenommen?",
+    "wir berichten über unseren Patient oder Btr.",
+    "wir berichten über unseren Patient oder Btr. oder Patient, * 0.00.0000,",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren",
+    "wir berichten über unseren Patient oder Btr. oder Patient, wh, geboren oder  Patient, * 0.00.0000,",  # noqa: E501
+]
 benchmark_tests(questions, "release_date", 4)
 
 # %%
-# attending_doctor 
-questions: List[str] = ["Wie heißt der behandelnde Arzt?", 
-                        "Arzt",
-                        "Was ist der Name des behandelnden Arztes?",
-                        "Grüßen , Prof, Dr",
-                        "Grüßen",
-                        "Grüße , Prof, Dr",
-                        "Mit freundlichen kollegialen Grüßen, Prof, Dr",
-                        "Mit freundlichen kollegialen Grüßen",
-                        "Mit freundlichen Grüßen, Prof, Dr",
-                        "Mit freundlichen Grüßen"]
+# Test questions for attending_doctor
+questions: List[str] = [
+    "Wie heißt der behandelnde Arzt?",
+    "Arzt",
+    "Was ist der Name des behandelnden Arztes?",
+    "Grüßen , Prof, Dr",
+    "Grüßen",
+    "Grüße , Prof, Dr",
+    "Mit freundlichen kollegialen Grüßen, Prof, Dr",
+    "Mit freundlichen kollegialen Grüßen",
+    "Mit freundlichen Grüßen, Prof, Dr",
+    "Mit freundlichen Grüßen",
+]
 benchmark_tests(questions, "attending_doctor", 4)
