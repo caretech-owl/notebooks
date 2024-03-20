@@ -1,118 +1,8 @@
 # %%
-# File type defintions
-from enum import Enum
-from typing import Dict, Iterable, List, Optional, Protocol
-
-from langchain.docstore.document import Document
-from pydantic import BaseModel, ConfigDict, TypeAdapter, computed_field
-
-
-class VectorStore(Protocol):
-    def merge_from(self, vector_store: "VectorStore") -> None:
-        pass
-
-    def save_local(self, path: str) -> None:
-        pass
-
-    def add_texts(
-        self,
-        texts: Iterable[str],
-    ) -> List[str]:
-        pass
-
-    def search(self, query: str, search_type: str, k: int) -> List[Document]:
-        pass
-
-
-class LabelStudioLabel(Enum):
-    Abteilung = "Abteilung"
-    Anrede = "Anrede"
-    AufnahmeDatum = "AufnahmeDatum"
-    BehandelnderArzt = "BehandelnderArzt"
-    Einrichtung = "Einrichtung"
-    EntlassDatum = "EntlassDatum"
-    Hausarzt = "Hausarzt"
-    PatientGeburtsdatum = "PatientGeburtsdatum"
-    PatientName = "PatientName"
-
-
-class LabelStudioAnnotationValue(BaseModel):
-    end: int
-    labels: List[LabelStudioLabel]
-    start: int
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioAnnotationResult(BaseModel):
-    from_name: str
-    id: str
-    origin: str
-    to_name: str
-    type: str
-    value: LabelStudioAnnotationValue
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioAnnotation(BaseModel):
-    completed_by: int
-    created_at: str
-    draft_created_at: Optional[str]
-    ground_truth: bool
-    id: int
-    import_id: Optional[str]
-    last_action: Optional[str]
-    last_created_by: Optional[int]
-    lead_time: float
-    parent_annotation: Optional[str]
-    parent_prediction: Optional[str]
-    prediction: Dict[str, str]
-    project: int
-    result_count: int
-    result: List[LabelStudioAnnotationResult]
-    task: int
-    unique_id: str
-    updated_at: str
-    updated_by: int
-    was_cancelled: bool
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioTask(BaseModel):
-    annotations: List[LabelStudioAnnotation]
-    cancelled_annotations: int
-    comment_authors: List[str]
-    comment_count: int
-    created_at: str
-    data: Optional[Dict[str, str]]
-    drafts: List[str]
-    file_upload: str
-    id: int
-    inner_id: int
-    last_comment_updated_at: Optional[str]
-    meta: Optional[Dict[str, str]]
-    predictions: List[str]
-    project: int
-    total_annotations: int
-    total_predictions: int
-    unresolved_comment_count: int
-    updated_at: str
-    updated_by: int
-
-    @computed_field  # type: ignore[misc]
-    @property
-    def file_name(self) -> str:
-        return self.file_upload.split("-", 1)[-1]
-
-    model_config = ConfigDict(extra="forbid")
-
-
-# %%
 # Define and load vector store
 
 import json
+from typing import Dict
 
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -149,10 +39,15 @@ text_splitter = RecursiveCharacterTextSplitter(
 # %%
 # Load test kit
 
-from typing import Tuple
+from typing import List, Tuple
+
+from pydantic import TypeAdapter
+
+from cto_notebooks.data.grascco import GrasccoTask
+from cto_notebooks.utils.rag import VectorStore
 
 with open(label_filepath, "r") as f:
-    label_file = TypeAdapter(List[LabelStudioTask]).validate_python(json.load(f))
+    label_file = TypeAdapter(List[GrasccoTask]).validate_python(json.load(f))
 
 tests: Dict[str, Tuple[Dict[str, str], VectorStore]] = {}
 
@@ -240,36 +135,26 @@ benchmark_test("Patient, wh., geboren", "patient_name")
 
 
 # %%
-def average_vector(field: str) -> List[float]:
-    vecs = []
-    for dict, store in tests.values():
-        for vec in store.search(
-            f"wir berichten über unseren gemeinsamen Patienten {dict[field]}",
-            search_type="similarity",
-            k=10,
-        ):
-            if dict[field] not in vec.page_content:
-                continue
-            # print(vec.page_content)
-            vecs.append(_embeddings.embed_query(vec.page_content))
-            break
-        # else:
-        #     msg = f"Field value: {dict[field]} not in document {file_name}."
-        #     raise ValueError(msg)
-        _embeddings.embed_query(vec.page_content)
-    return numpy.mean(vecs, axis=0)
-
-
-# %%
 # Calcalate and test average vector for patient_name
-import numpy
+from cto_notebooks.utils.rag import VectorStore, average_vector
 
-m_vec = average_vector("patient_name")
+m_vec = average_vector(
+    "patient_name",
+    embeddings=_embeddings,
+    data_dict=tests.values(),
+    initial_query="wir berichten gemeinsam Patient wh.",
+    k=10,
+)
 benchmark_test(m_vec, "patient_name", 3)
 
 # %%
 # Calculate and test average vector for attending_doctor
-m_vec = average_vector("attending_doctor")
+m_vec = average_vector(
+    "attending_doctor",
+    embeddings=_embeddings,
+    data_dict=tests.values(),
+    initial_query="Mit freundlichen Grüßen",
+)
 benchmark_test(m_vec, "attending_doctor", 3)
 
 # %%
@@ -328,7 +213,7 @@ def benchmark_tests(
 
 
 # %%
-# patient_name
+# Test questions for patient_name
 questions: List[str] = [
     "Wie heißt der Patient?",
     "Patient?",
@@ -405,3 +290,5 @@ questions: List[str] = [
     "Mit freundlichen Grüßen",
 ]
 benchmark_tests(questions, "attending_doctor", 4)
+
+# %%
