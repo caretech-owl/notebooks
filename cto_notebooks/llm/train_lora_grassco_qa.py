@@ -13,13 +13,13 @@ exclude_from_training = ["Cajal.txt", "Boeck.txt", "Baastrup.txt"]
 
 config = LoraTrainingConfig(
     model={
-        "tokenizer": "LeoLM/leo-hessianai-7b-chat",
-        "config": {"pretrained_model_name_or_path": "LeoLM/leo-hessianai-7b-chat"},
+        "tokenizer": "jphme/em_german_leo_mistral",
+        "config": {"pretrained_model_name_or_path": "jphme/em_german_leo_mistral"},
     },
     batch_size=4,
     micro_batch_size=1,
-    cutoff_len=2200,
     stop_at_loss=-1,
+    epochs=1,
     output_dir=SETTINGS.cache_dir.joinpath("lora").as_posix(),
     modules=LoraModules(default=False, q=True, v=True),
     # flags=TrainingFlags(use_cpu=True)
@@ -42,7 +42,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 # VectorStore
 chunk_size = 256
 chunk_overlap = 25
-vector_count = 2
+vector_count = 3
 vector_model_name = "sentence-transformers/all-MiniLM-L6-v2"
 _embeddings = HuggingFaceEmbeddings(
     model_name=vector_model_name,
@@ -52,7 +52,7 @@ _embeddings = HuggingFaceEmbeddings(
 # %%
 # Setup prompt
 
-qa_analyze_prompt = """<|im_start|>user
+qa_analyze_prompt = """<s>Du bist ein hilfreicher Assistent. USER: \
 Kontext1: {context0} zu
 Frage1: {question0} in JSON-Feld {field0}.
 Kontext2: {context1} zu
@@ -64,10 +64,9 @@ Frage4: {question3} in JSON-Feld {field3}.
 Kontext5: {context4} zu
 Frage5: {question4} in JSON-Feld {field4}.
 
-Gebe nur die hilfreichen Antworten unten zurück und nichts anderes. Halte dich außerdem sehr kurz mit der Antwort.
-Hilfreiche Antwort:<|im_end|>
-<|im_start|>assistant
-{target}<|im_end|>"""  # noqa: E501
+Gebe nur die hilfreichen Antworten unten zurück und nichts anderes. \
+Halte dich außerdem sehr kurz mit der Antwort. \
+ASSISTANT:{target}</s>"""  # noqa: E501
 # %%
 # File type defintions
 from enum import Enum
@@ -242,7 +241,9 @@ def _create_train_prompt(document: str, target: str) -> str:
     for question in questions:
         questions_dict[question] = [
             doc.page_content
-            for doc in _vectorstore.search(question, search_type="similarity", k=2)
+            for doc in _vectorstore.search(
+                question, search_type="similarity", k=vector_count
+            )
         ]
 
     for perm_patient_name in permutations(questions_dict[questions[0]]):
@@ -337,8 +338,6 @@ from pathlib import Path
 import torch.multiprocessing
 from datasets import Dataset
 
-from cto_notebooks.utils.data import tokenize
-
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
@@ -348,12 +347,7 @@ def tokenizer_worker(args: List) -> List[Dict[str, List]]:
         **config.model["config"], trust_remote_code=False
     )
     tokenizer.pad_token_id = 0
-    tokenizer.padding_side = "left"
-    tokenized = [
-        tokenize(s["instruct"], tokenizer, config.cutoff_len)
-        for s in samples
-        if len(s["instruct"]) <= config.cutoff_len
-    ]
+    tokenized = [tokenizer(s["instruct"], add_special_tokens=False) for s in samples]
     if tokenized:
         data = Dataset.from_list(tokenized)
         data.save_to_disk(f"{train_data_folder}/samples-{start}-{start+len(samples)-1}")
@@ -397,7 +391,7 @@ tokenizer = AutoTokenizer.from_pretrained(
     **config.model["config"], trust_remote_code=False
 )
 tokenizer.pad_token_id = 0
-tokenizer.padding_side = "left"
+# tokenizer.padding_side = "left"
 
 decoded_entries = []
 for i in range(min(10, len(train_data))):
@@ -430,7 +424,7 @@ trainer.setup_training(
 
 print(f"Going to train modules: {', '.join(config.modules.target_modules(model))}")
 # %%
-## Step 6 - Run Trainer
+# Step 6 - Run Trainer
 import time
 
 if Path(config.output_dir).joinpath("adapter_model.safetensors").exists():
@@ -465,3 +459,5 @@ else:
         f"Done! LoRA saved to `{config.output_dir}`.\n\nBefore testing your new LoRA, "
         "make sure to first reload the model, as it is currently dirty from training."
     )
+
+# %%
