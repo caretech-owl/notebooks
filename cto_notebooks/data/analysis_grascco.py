@@ -297,13 +297,14 @@ def benchmark_tests(
         res = collect_res(question, field, k)
         counter = Counter(res.values())
         size = len(res)
-        benchmark_re = BenchmarkResult(
-            question=question,
-            sample_size=size,
-            miss=counter[0] / size * 100,
-            vector_matches=[counter[i] / size * 100 for i in range(1, k + 1)],
+        benchmark_results.append(
+            BenchmarkResult(
+                question=question,
+                sample_size=size,
+                miss=counter[0] / size * 100,
+                vector_matches=[counter[i] / size * 100 for i in range(1, k + 1)],
+            )
         )
-        benchmark_results.append(benchmark_re)
 
     # sort
     benchmark_results = sorted(
