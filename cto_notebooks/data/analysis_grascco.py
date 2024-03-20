@@ -319,7 +319,6 @@ def benchmark_tests(
         bench_re = benchmark_results[i]
         print("-" * 30)
         print(f"Frage: {bench_re.question}")
-
         print(f"Sample size: {bench_re.sample_size}")
         print(f"Miss: {bench_re.miss:.2f}")
         for i in range(0, len(bench_re.vector_matches)):
