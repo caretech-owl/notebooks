@@ -196,6 +196,95 @@ def load_label_studio_tasks(file_path: str) -> List[LabelStudioTask]:
     tasks = TypeAdapter(List[LabelStudioTask]).validate_python(obj)
     return tasks
 
+# %% define trainingsdata functions
+from datetime import datetime
+import re
+
+def _convert_to_datetime(date_string: str) -> datetime:
+    if re.match("\d{1,2}\.\d{1,2}\.\d{4}$", date_string):
+        return datetime.strptime(date_string, "%d.%m.%Y")
+    elif re.match("\d{1,2}\.\d{1,2}\.\d{2}$", date_string):
+        return datetime.strptime(date_string, "%d.%m.%y")
+    elif re.match("\d{1,2}\-\d{1,2}\-\d{4}$", date_string):
+        return datetime.strptime(date_string, "%d-%m-%Y")
+    elif re.match("\d{1,2}\-\d{1,2}\-\d{2}$", date_string):
+        return datetime.strptime(date_string, "%d-%m-%y")
+    elif re.match("\d{1,2}/\d{1,2}/\d{4}$", date_string):
+        return datetime.strptime(date_string, "%d/%m/%Y")
+    elif re.match("\d{1,2}/\d{1,2}/\d{2}$", date_string):
+        return datetime.strptime(date_string, "%d/%m/%y")
+    elif re.match("\d{4}\-\d{2}\-\d{2}$", date_string):
+        return datetime.strptime(date_string, "%Y-%m-%d")
+    
+def _replace_month_names(date : str) -> str:
+    month_Dict = {"Januar": "01",
+                "Februar": "02",
+                "März": "03",
+                "April": "04",
+                "Mai": "05",
+                "Juni": "06",
+                "Juli": "07",
+                "August": "08",
+                "September": "09",
+                "Oktober": "10",
+                "November": "11",
+                "Dezember": "12"}
+
+    for month_name, month_number in month_Dict.items():
+        if any(re.finditer(month_name, date)):
+            date = date.replace(" ", "")
+
+            date = date.replace("." + month_name + ".", "." + month_number + ".")
+            date = date.replace(month_name + ".", "." + month_number + ".")
+            date = date.replace("." + month_name, "." + month_number + ".")
+            date = date.replace(month_name, "." + month_number + ".")
+    return date
+
+def _format_recording_and_release_date(recording_date_str: str, release_date_str: str, target_format: str = "%d.%m.%Y") -> tuple[str, str]:
+    formatted_recording_date : str = recording_date_str
+    formatted_release_date : str = release_date_str   
+    recording_date : datetime = None
+    release_date : datetime = None
+
+    formatted_recording_date = _replace_month_names(formatted_recording_date).replace(" ", "")
+    formatted_release_date = _replace_month_names(formatted_release_date).replace(" ", "")
+
+    if not formatted_recording_date.isspace() and  formatted_recording_date != "":  
+        recording_date = _convert_to_datetime(formatted_recording_date)
+        if recording_date != None:
+            formatted_recording_date = recording_date.strftime(target_format)
+
+    if not formatted_release_date.isspace() and  formatted_release_date != "":  
+        release_date = _convert_to_datetime(formatted_release_date)
+        if release_date != None:
+            formatted_release_date = release_date.strftime(target_format)
+        
+    if recording_date == None and release_date != None:             
+        if re.match("\d{1,2}\.\d{1,2}\.", formatted_recording_date):
+            formatted_recording_date = formatted_recording_date + str(release_date.year)
+            recording_date = _convert_to_datetime(formatted_recording_date)
+            if recording_date != None:
+                if recording_date <= release_date:
+                    formatted_recording_date = recording_date.strftime(target_format)
+        elif re.match("\d{1,2}\.", formatted_recording_date):
+            formatted_recording_date = formatted_recording_date + str(release_date.month) + "." + str(release_date.year)
+            recording_date = _convert_to_datetime(formatted_recording_date)
+            if recording_date != None:
+                if recording_date <= release_date:
+                    formatted_recording_date = recording_date.strftime(target_format)
+
+    return (formatted_recording_date, formatted_release_date)
+
+def format_patient_date_of_birth(patient_date_of_birth_str: str, target_format: str = "%d.%m.%Y"):
+    formatted_patient_date_of_birth = _replace_month_names(patient_date_of_birth_str).replace(" ", "")
+    
+    if not formatted_patient_date_of_birth.isspace() and  formatted_patient_date_of_birth != "":  
+        patient_date_of_birth = _convert_to_datetime(formatted_patient_date_of_birth)
+        if patient_date_of_birth != None:
+            formatted_patient_date_of_birth = patient_date_of_birth.strftime(target_format)
+
+    return formatted_patient_date_of_birth
+
 
 def _replace_with_german_filenames(file_name: str) -> str:
     german_file_names: Dict[str, str] = {
@@ -288,7 +377,7 @@ def _load_training_data() -> List[Dict]:
         for annotation in task.annotations:
             if file_name not in exclude_from_training:
                 with open(
-                    raw_data_folder.joinpath(file_name), encoding="utf-8"
+                    raw_data_folder.joinpath(file_name), encoding="utf-8-sig"
                 ) as document_file:
                     document = document_file.read()
 
@@ -307,7 +396,15 @@ def _load_training_data() -> List[Dict]:
                     if str(label.name) in fields:
                         json_dict[fields[str(label.name)]] = value
 
+                # format dates
+                json_dict["patient_date_of_birth"] = format_patient_date_of_birth(json_dict["patient_date_of_birth"])
+
+                formatted_dates = _format_recording_and_release_date(json_dict["recording_date"], json_dict["release_date"])
+                json_dict["recording_date"] = formatted_dates[0]
+                json_dict["release_date"] = formatted_dates[1]
+
                 target = json.dumps(json_dict)
+
                 prompt_list = _create_train_prompt(document, target)
 
                 for prompt in prompt_list:
