@@ -72,8 +72,15 @@ for task in label_file:
             start = res.value.start
             end = res.value.end
             value = document[start:end]
-            if label.name in fields:
-                json_dict[fields[str(label.name)]] = value
+
+            if str(label.name) in fields:
+                if (json_dict[fields[str(label.name)]] != ""
+                    and (fields[str(label.name)] == "attending_doctor")):
+                    json_dict[fields[str(label.name)]] = (json_dict[
+                        fields[str(label.name)]] + ", " + value)
+                else:
+                    json_dict[fields[str(label.name)]] = value
+
         # print(json_dict["patient_name"])
         vectorstore = FAISS.from_texts(text_splitter.split_text(document), _embeddings)
         tests[file_name] = (json_dict, vectorstore)
