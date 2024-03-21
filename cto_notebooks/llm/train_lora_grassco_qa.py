@@ -197,27 +197,28 @@ def load_label_studio_tasks(file_path: str) -> List[LabelStudioTask]:
     return tasks
 
 # %% define trainingsdata functions
-from datetime import datetime
 import re
+from datetime import datetime
+
 
 def _convert_to_datetime(date_string: str) -> datetime:
-    if re.match("\d{1,2}\.\d{1,2}\.\d{4}$", date_string):
+    if re.match(r"\d{1,2}\.\d{1,2}\.\d{4}$", date_string):
         return datetime.strptime(date_string, "%d.%m.%Y")
-    elif re.match("\d{1,2}\.\d{1,2}\.\d{2}$", date_string):
+    elif re.match(r"\d{1,2}\.\d{1,2}\.\d{2}$", date_string):
         return datetime.strptime(date_string, "%d.%m.%y")
-    elif re.match("\d{1,2}\-\d{1,2}\-\d{4}$", date_string):
+    elif re.match(r"\d{1,2}\-\d{1,2}\-\d{4}$", date_string):
         return datetime.strptime(date_string, "%d-%m-%Y")
-    elif re.match("\d{1,2}\-\d{1,2}\-\d{2}$", date_string):
+    elif re.match(r"\d{1,2}\-\d{1,2}\-\d{2}$", date_string):
         return datetime.strptime(date_string, "%d-%m-%y")
-    elif re.match("\d{1,2}/\d{1,2}/\d{4}$", date_string):
+    elif re.match(r"\d{1,2}/\d{1,2}/\d{4}$", date_string):
         return datetime.strptime(date_string, "%d/%m/%Y")
-    elif re.match("\d{1,2}/\d{1,2}/\d{2}$", date_string):
+    elif re.match(r"\d{1,2}/\d{1,2}/\d{2}$", date_string):
         return datetime.strptime(date_string, "%d/%m/%y")
-    elif re.match("\d{4}\-\d{2}\-\d{2}$", date_string):
+    elif re.match(r"\d{4}\-\d{2}\-\d{2}$", date_string):
         return datetime.strptime(date_string, "%Y-%m-%d")
-    
+
 def _replace_month_names(date : str) -> str:
-    month_Dict = {"Januar": "01",
+    month_dict = {"Januar": "01",
                 "Februar": "02",
                 "März": "03",
                 "April": "04",
@@ -230,7 +231,7 @@ def _replace_month_names(date : str) -> str:
                 "November": "11",
                 "Dezember": "12"}
 
-    for month_name, month_number in month_Dict.items():
+    for month_name, month_number in month_dict.items():
         if any(re.finditer(month_name, date)):
             date = date.replace(" ", "")
 
@@ -240,48 +241,60 @@ def _replace_month_names(date : str) -> str:
             date = date.replace(month_name, "." + month_number + ".")
     return date
 
-def _format_recording_and_release_date(recording_date_str: str, release_date_str: str, target_format: str = "%d.%m.%Y") -> tuple[str, str]:
+def _format_stay_date(
+        recording_date_str: str, release_date_str: str, target_format: str = "%d.%m.%Y"
+        ) -> tuple[str, str]:
     formatted_recording_date : str = recording_date_str
-    formatted_release_date : str = release_date_str   
+    formatted_release_date : str = release_date_str
     recording_date : datetime = None
     release_date : datetime = None
 
-    formatted_recording_date = _replace_month_names(formatted_recording_date).replace(" ", "")
-    formatted_release_date = _replace_month_names(formatted_release_date).replace(" ", "")
+    formatted_recording_date = _replace_month_names(
+        formatted_recording_date
+        ).replace(" ", "")
+    formatted_release_date = _replace_month_names(
+        formatted_release_date
+        ).replace(" ", "")
 
-    if not formatted_recording_date.isspace() and  formatted_recording_date != "":  
+    if not formatted_recording_date.isspace() and  formatted_recording_date != "":
         recording_date = _convert_to_datetime(formatted_recording_date)
-        if recording_date != None:
+        if recording_date is not None:
             formatted_recording_date = recording_date.strftime(target_format)
 
-    if not formatted_release_date.isspace() and  formatted_release_date != "":  
+    if not formatted_release_date.isspace() and  formatted_release_date != "":
         release_date = _convert_to_datetime(formatted_release_date)
-        if release_date != None:
+        if release_date is not None:
             formatted_release_date = release_date.strftime(target_format)
-        
-    if recording_date == None and release_date != None:             
-        if re.match("\d{1,2}\.\d{1,2}\.", formatted_recording_date):
+
+    if recording_date is None and release_date is not None:
+        if re.match(r"\d{1,2}\.\d{1,2}\.", formatted_recording_date):
             formatted_recording_date = formatted_recording_date + str(release_date.year)
             recording_date = _convert_to_datetime(formatted_recording_date)
-            if recording_date != None:
-                if recording_date <= release_date:
+            if recording_date is not None and recording_date <= release_date:
                     formatted_recording_date = recording_date.strftime(target_format)
-        elif re.match("\d{1,2}\.", formatted_recording_date):
-            formatted_recording_date = formatted_recording_date + str(release_date.month) + "." + str(release_date.year)
+        elif re.match(r"\d{1,2}\.", formatted_recording_date):
+            formatted_recording_date = (formatted_recording_date
+                                        + str(release_date.month)
+                                        + "." + str(release_date.year))
             recording_date = _convert_to_datetime(formatted_recording_date)
-            if recording_date != None:
-                if recording_date <= release_date:
+            if recording_date is not None and recording_date <= release_date:
                     formatted_recording_date = recording_date.strftime(target_format)
-
     return (formatted_recording_date, formatted_release_date)
 
-def format_patient_date_of_birth(patient_date_of_birth_str: str, target_format: str = "%d.%m.%Y"):
-    formatted_patient_date_of_birth = _replace_month_names(patient_date_of_birth_str).replace(" ", "")
-    
-    if not formatted_patient_date_of_birth.isspace() and  formatted_patient_date_of_birth != "":  
+def format_patient_date_of_birth(
+        patient_date_of_birth_str: str, target_format: str = "%d.%m.%Y"
+        ) -> str:
+    formatted_patient_date_of_birth = _replace_month_names(
+        patient_date_of_birth_str
+        ).replace(" ", "")
+
+    if (not formatted_patient_date_of_birth.isspace()
+        and  formatted_patient_date_of_birth != ""):
         patient_date_of_birth = _convert_to_datetime(formatted_patient_date_of_birth)
-        if patient_date_of_birth != None:
-            formatted_patient_date_of_birth = patient_date_of_birth.strftime(target_format)
+        if patient_date_of_birth is not None:
+            formatted_patient_date_of_birth = patient_date_of_birth.strftime(
+                target_format
+                )
 
     return formatted_patient_date_of_birth
 
@@ -394,12 +407,32 @@ def _load_training_data() -> List[Dict]:
                     end = res.value.end
                     value = document[start:end]
                     if str(label.name) in fields:
-                        json_dict[fields[str(label.name)]] = value
+                        if (json_dict[fields[str(label.name)]] != ""
+                        and fields[str(label.name)] == "attending_doctor"):
+                            json_dict[fields[str(label.name)]] = json_dict[
+                                fields[str(label.name)]
+                                ] + ", " + value
+                        else:
+                            json_dict[fields[str(label.name)]] = value
+
+                # format names
+                json_dict["patient_name"] = json_dict[
+                    "patient_name"
+                    ].replace("\n", " ")
+                json_dict["attending_doctor"] = json_dict[
+                    "attending_doctor"
+                    ].replace("\n", " ")
 
                 # format dates
-                json_dict["patient_date_of_birth"] = format_patient_date_of_birth(json_dict["patient_date_of_birth"])
+                json_dict["patient_date_of_birth"] = format_patient_date_of_birth(
+                    json_dict["patient_date_of_birth"]
+                    )
 
-                formatted_dates = _format_recording_and_release_date(json_dict["recording_date"], json_dict["release_date"])
+                formatted_dates = _format_stay_date(
+                    json_dict["recording_date"],
+                    json_dict["release_date"]
+                    )
+
                 json_dict["recording_date"] = formatted_dates[0]
                 json_dict["release_date"] = formatted_dates[1]
 
