@@ -281,7 +281,7 @@ def _format_stay_date(
                     formatted_recording_date = recording_date.strftime(target_format)
     return (formatted_recording_date, formatted_release_date)
 
-def format_patient_date_of_birth(
+def _format_patient_date_of_birth(
         patient_date_of_birth_str: str, target_format: str = "%d.%m.%Y"
         ) -> str:
     formatted_patient_date_of_birth = _replace_month_names(
@@ -298,6 +298,12 @@ def format_patient_date_of_birth(
 
     return formatted_patient_date_of_birth
 
+def _format_patient_name(name: str) -> str:
+    if name.find(", ") != -1:
+        words = name.split(",")
+        if len(words) == 2:
+            name = words[1] + " " + words[0]
+    return name.strip()
 
 def _replace_with_german_filenames(file_name: str) -> str:
     german_file_names: Dict[str, str] = {
@@ -423,8 +429,12 @@ def _load_training_data() -> List[Dict]:
                     "attending_doctor"
                     ].replace("\n", " ")
 
+                json_dict["patient_name"] = _format_patient_name(
+                    json_dict["patient_name"]
+                    )
+
                 # format dates
-                json_dict["patient_date_of_birth"] = format_patient_date_of_birth(
+                json_dict["patient_date_of_birth"] = _format_patient_date_of_birth(
                     json_dict["patient_date_of_birth"]
                     )
 
