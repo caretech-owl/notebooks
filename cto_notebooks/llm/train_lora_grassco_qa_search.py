@@ -337,8 +337,8 @@ def _create_train_prompt(document: str, target_dict: str) -> str:
     prompt_list: List[(str, str)] = []
 
     for question in questions:
-        parameters["target"] = ("{question: " 
-                                + str(question) + ", answer: " 
+        parameters["target"] = ("{question: "
+                                + str(question) + ", answer: "
                                 + str(target_dict[fields[question]]) + "}")
 
         context = [
