@@ -1,7 +1,6 @@
 # %%
 # Define and load vector store
 
-import json
 from typing import Dict
 
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -23,14 +22,6 @@ _embeddings = HuggingFaceEmbeddings(
     model_kwargs={"device": "cpu"},
 )
 
-fields: Dict[str, str] = {
-    "PatientName": "patient_name",
-    "PatientGeburtsdatum": "patient_date_of_birth",
-    "BehandelnderArzt": "attending_doctor",
-    "AufnahmeDatum": "recording_date",
-    "EntlassDatum": "release_date",
-}
-
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=chunk_size,
     chunk_overlap=chunk_overlap,
@@ -39,51 +30,18 @@ text_splitter = RecursiveCharacterTextSplitter(
 # %%
 # Load test kit
 
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
-from pydantic import TypeAdapter
-
-from cto_notebooks.data.grascco import GrasccoTask
+from cto_notebooks.data.grascco import load_labeled_data
 from cto_notebooks.utils.rag import VectorStore
 
-with open(label_filepath, "r") as f:
-    label_file = TypeAdapter(List[GrasccoTask]).validate_python(json.load(f))
-
-tests: Dict[str, Tuple[Dict[str, str], VectorStore]] = {}
-
-for task in label_file:
-    file_name = task.file_name
-    for annotation in task.annotations:
-        with open(
-            raw_data_folder.joinpath(file_name), encoding="utf-8-sig"
-        ) as document_file:
-            document = document_file.read()
-
-        json_dict: Dict[str, str] = {
-            "patient_name": "",
-            "patient_date_of_birth": "",
-            "attending_doctor": "",
-            "recording_date": "",
-            "release_date": "",
-        }
-
-        for res in annotation.result:
-            label = res.value.labels[0]
-            start = res.value.start
-            end = res.value.end
-            value = document[start:end]
-
-            if str(label.name) in fields:
-                if (json_dict[fields[str(label.name)]] != ""
-                    and (fields[str(label.name)] == "attending_doctor")):
-                    json_dict[fields[str(label.name)]] = (json_dict[
-                        fields[str(label.name)]] + ", " + value)
-                else:
-                    json_dict[fields[str(label.name)]] = value
-
-        # print(json_dict["patient_name"])
-        vectorstore = FAISS.from_texts(text_splitter.split_text(document), _embeddings)
-        tests[file_name] = (json_dict, vectorstore)
+data = load_labeled_data(label_filepath, raw_data_folder)
+tests: Dict[str, Tuple[Dict[str, Union[str, List[str]]], VectorStore]] = {}
+for record in data:
+    tests[record["file_name"]] = (
+        record,
+        FAISS.from_texts(text_splitter.split_text(record["text"]), _embeddings),
+    )
 
 # %%
 # Define tests for accuracy
@@ -103,14 +61,15 @@ def collect_res(
         for rank, doc in enumerate(
             store.search(question, search_type="similarity", k=k)
             if isinstance(question, str)
-            else store.similarity_search_by_vector(
-                question, search_type="similarity", k=k
-            ),
+            else store.similarity_search_by_vector(question, k=k),
             1,
         ):
-            if target_value in doc.page_content:
+            if isinstance(target_value, str):
+                target_value = [target_value]
+            if all(value in doc.page_content for value in target_value):
                 res[file_name] = rank
                 break
+
         else:
             # print(file_name)
             res[file_name] = 0
@@ -157,12 +116,12 @@ benchmark_test(m_vec, "patient_name", 3)
 # %%
 # Calculate and test average vector for attending_doctor
 m_vec = average_vector(
-    "attending_doctor",
+    "attending_doctors",
     embeddings=_embeddings,
     data_dict=tests.values(),
     initial_query="Mit freundlichen Grüßen",
 )
-benchmark_test(m_vec, "attending_doctor", 3)
+benchmark_test(m_vec, "attending_doctors", 3)
 
 # %%
 # Define batch benchmark ranking tests
@@ -296,6 +255,6 @@ questions: List[str] = [
     "Mit freundlichen Grüßen, Prof, Dr",
     "Mit freundlichen Grüßen",
 ]
-benchmark_tests(questions, "attending_doctor", 4)
+benchmark_tests(questions, "attending_doctors", 4)
 
 # %%
