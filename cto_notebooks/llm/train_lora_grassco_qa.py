@@ -138,7 +138,7 @@ def _format_stay_date(recording: str, release: str) -> None:
             settings={"RELATIVE_BASE": tmp},
         )
         if tmp is None:
-            msg = f"Could not parse date from {release}!"
+            msg = f"Could not parse date from {recording}!"
             raise AssertionError(msg)
         rec_date = tmp.strftime("%d.%m.%Y")
     return rec_date, rel_date
