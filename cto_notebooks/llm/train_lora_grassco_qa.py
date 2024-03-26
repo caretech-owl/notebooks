@@ -2,8 +2,11 @@
 # Setup training parameters
 import glob
 
+from pydantic import TypeAdapter
+
 from cto_notebooks.utils.config import CONFIG as SETTINGS
 from cto_notebooks.utils.lora import LoraModules, LoraTrainingConfig
+from cto_notebooks.utils.rag import average_vector
 
 data_dir = SETTINGS.data_dir.joinpath("grascco")
 raw_data_folder = data_dir.joinpath("raw")
@@ -35,7 +38,7 @@ if HAS_TRAIN_DATA:
 
 # %%
 # Create vector embedding
-from typing import List
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from langchain.embeddings import HuggingFaceEmbeddings
 
@@ -52,6 +55,27 @@ _embeddings = HuggingFaceEmbeddings(
 # %%
 # Setup prompt
 
+from typing import Dict, List
+
+questions: List[str] = [
+    "Wie heißt der Patient?",
+    "Wann hat der Patient Geburstag?",
+    "Wie heißt der Arzt?",
+    "Wann wurde der Patient bei uns aufgenommen?",
+    "Wann wurde der Patient bei uns entlassen?",
+]
+fields: Dict[str, str] = {
+    "Wie heißt der Patient?": "patient_name",
+    "Wann hat der Patient Geburstag?": "patient_date_of_birth",
+    "Wie heißt der Arzt?": "attending_doctor",
+    "Wann wurde der Patient bei uns aufgenommen?": "recording_date",
+    "Wann wurde der Patient bei uns entlassen?": "release_date",
+}
+
+queries: Dict[str, List[float]] = {
+    "Wie heißt der Patient?": average_vector("patient_name", embeddings=_embeddings)
+}
+
 qa_analyze_prompt = """<s>Du bist ein hilfreicher Assistent. USER: \
 Kontext1: {context0} zu
 Frage1: {question0} in JSON-Feld {field0}.
@@ -67,116 +91,6 @@ Frage5: {question4} in JSON-Feld {field4}.
 Gebe nur die hilfreichen Antworten unten zurück und nichts anderes. \
 Halte dich außerdem sehr kurz mit der Antwort. \
 ASSISTANT:{target}</s>"""  # noqa: E501
-# %%
-# File type defintions
-from enum import Enum
-from typing import Dict, Iterable, Optional, Protocol
-
-from langchain.docstore.document import Document
-from pydantic import BaseModel, ConfigDict, TypeAdapter, computed_field
-
-
-class VectorStore(Protocol):
-    def merge_from(self, vector_store: "VectorStore") -> None:
-        pass
-
-    def save_local(self, path: str) -> None:
-        pass
-
-    def add_texts(
-        self,
-        texts: Iterable[str],
-    ) -> List[str]:
-        pass
-
-    def search(self, query: str, search_type: str, k: int) -> List[Document]:
-        pass
-
-
-class LabelStudioLabel(Enum):
-    Abteilung = "Abteilung"
-    Anrede = "Anrede"
-    AufnahmeDatum = "AufnahmeDatum"
-    BehandelnderArzt = "BehandelnderArzt"
-    Einrichtung = "Einrichtung"
-    EntlassDatum = "EntlassDatum"
-    Hausarzt = "Hausarzt"
-    PatientGeburtsdatum = "PatientGeburtsdatum"
-    PatientName = "PatientName"
-
-
-class LabelStudioAnnotationValue(BaseModel):
-    end: int
-    labels: List[LabelStudioLabel]
-    start: int
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioAnnotationResult(BaseModel):
-    from_name: str
-    id: str
-    origin: str
-    to_name: str
-    type: str
-    value: LabelStudioAnnotationValue
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioAnnotation(BaseModel):
-    completed_by: int
-    created_at: str
-    draft_created_at: Optional[str]
-    ground_truth: bool
-    id: int
-    import_id: Optional[str]
-    last_action: Optional[str]
-    last_created_by: Optional[int]
-    lead_time: float
-    parent_annotation: Optional[str]
-    parent_prediction: Optional[str]
-    prediction: Dict[str, str]
-    project: int
-    result_count: int
-    result: List[LabelStudioAnnotationResult]
-    task: int
-    unique_id: str
-    updated_at: str
-    updated_by: int
-    was_cancelled: bool
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioTask(BaseModel):
-    annotations: List[LabelStudioAnnotation]
-    cancelled_annotations: int
-    comment_authors: List[str]
-    comment_count: int
-    created_at: str
-    data: Optional[Dict[str, str]]
-    drafts: List[str]
-    file_upload: str
-    id: int
-    inner_id: int
-    last_comment_updated_at: Optional[str]
-    meta: Optional[Dict[str, str]]
-    predictions: List[str]
-    project: int
-    total_annotations: int
-    total_predictions: int
-    unresolved_comment_count: int
-    updated_at: str
-    updated_by: int
-
-    @computed_field  # type: ignore[misc]
-    @property
-    def file_name(self) -> str:
-        return self.file_upload.split("-", 1)[-1]
-
-    model_config = ConfigDict(extra="forbid")
-
 
 # %%
 # define LabelStudio helper functions
@@ -188,12 +102,17 @@ from datasets import Dataset
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import FAISS
 
+from cto_notebooks.data.grascco import GrasccoTask
 
-def load_label_studio_tasks(file_path: str) -> List[LabelStudioTask]:
+if TYPE_CHECKING:
+    from cto_notebooks.utils.rag import VectorStore
+
+
+def load_label_studio_tasks(file_path: str) -> List[GrasccoTask]:
     with open(file_path, "r") as f:
         obj = json.load(f)
 
-    tasks = TypeAdapter(List[LabelStudioTask]).validate_python(obj)
+    tasks = TypeAdapter(List[GrasccoTask]).validate_python(obj)
     return tasks
 
 # %% define trainingsdata functions
@@ -324,21 +243,6 @@ def _create_train_prompt(document: str, target: str) -> str:
     )
     texts = text_splitter.split_text(document)
     _vectorstore = FAISS.from_texts(texts, _embeddings)
-
-    questions: List[str] = [
-        "Wie heißt der Patient?",
-        "Wann hat der Patient Geburstag?",
-        "Wie heißt der Arzt?",
-        "Wann wurde der Patient bei uns aufgenommen?",
-        "Wann wurde der Patient bei uns entlassen?",
-    ]
-    fields: Dict[str, str] = {
-        "Wie heißt der Patient?": "patient_name",
-        "Wann hat der Patient Geburstag?": "patient_date_of_birth",
-        "Wie heißt der Arzt?": "attending_doctor",
-        "Wann wurde der Patient bei uns aufgenommen?": "recording_date",
-        "Wann wurde der Patient bei uns entlassen?": "release_date",
-    }
 
     questions_dict: Dict[str, str] = {}
     parameters: Dict[str, str] = {}
