@@ -23,6 +23,7 @@ gerd = [
     "pydantic",
     "sentence-transformers",
     "faiss-cpu",
+    "dateparser",
 ]
 
 [tool.ruff.lint]
