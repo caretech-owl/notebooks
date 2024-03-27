@@ -122,7 +122,9 @@ from copy import deepcopy
 from dateparser import parse
 
 
-def _format_stay_date(recording: str, release: str) -> None:
+def _format_stay_date(
+    recording: str, release: str
+) -> Tuple[Optional[str], Optional[str]]:
     rec_date = rel_date = None
     if release:
         tmp = parse(release, languages=["de"], date_formats=["%Y-%m-%d"])
@@ -146,7 +148,7 @@ def _format_stay_date(recording: str, release: str) -> None:
 
 def _format_patient_date_of_birth(
     date_str: str, target_format: str = "%d.%m.%Y"
-) -> str:
+) -> Optional[str]:
     date = parse(date_str, languages=["de"], date_formats=["%Y-%m-%d"])
     return date.strftime(target_format) if date else None
 
@@ -159,7 +161,9 @@ def _format_patient_name(name: str) -> str:
     return name.strip()
 
 
-def _create_train_prompt(document: str, target: str, orig_json: Dict) -> str:
+def _create_train_prompt(
+    document: str, target: str, orig_json: Dict[str, Union[str, List[str]]]
+) -> List[str]:
     _vectorstore: Optional[VectorStore] = None
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
