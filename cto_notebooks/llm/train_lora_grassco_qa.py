@@ -4,6 +4,7 @@ import glob
 from itertools import permutations
 
 from cto_notebooks.utils.config import CONFIG as SETTINGS
+from cto_notebooks.utils.data import split_plain_text
 from cto_notebooks.utils.lora import LoraModules, LoraTrainingConfig
 from cto_notebooks.utils.rag import VectorStore, average_vector
 
@@ -48,7 +49,7 @@ vector_count = 3
 vector_model_name = "sentence-transformers/distiluse-base-multilingual-cased-v1"
 _embeddings = HuggingFaceEmbeddings(
     model_name=vector_model_name,
-    model_kwargs={"device": "cpu"},
+    model_kwargs={"device": "cuda"},
 )
 
 # %%
@@ -67,7 +68,12 @@ tests: Dict[str, Tuple[Dict[str, Union[str, List[str]]], VectorStore]] = {}
 for record in data:
     tests[record["file_name"]] = (
         record,
-        FAISS.from_texts(text_splitter.split_text(record["text"]), _embeddings),
+        FAISS.from_documents(
+            split_plain_text(
+                record["text"], chunk_size=chunk_size, chunk_overlap=chunk_overlap
+            ),
+            _embeddings,
+        ),
     )
 
 
@@ -97,19 +103,28 @@ queries: Dict[str, List[float]] = {
 }
 
 qa_analyze_prompt = """<s>Du bist ein hilfreicher Assistent. USER: \
-Kontext1: {context0} zu
-Frage1: {question0} in JSON-Feld {field0}.
-Kontext2: {context1} zu
-Frage2: {question1} in JSON-Feld {field1}.
-Kontext3: {context2} zu
-Frage3: {question2} in JSON-Feld {field2}.
-Kontext4: {context3} zu
-Frage4: {question3} in JSON-Feld {field3}.
-Kontext5: {context4} zu
-Frage5: {question4} in JSON-Feld {field4}.
-
-Gebe nur die hilfreichen Antworten unten zurück und nichts anderes. \
-Halte dich außerdem sehr kurz mit der Antwort. \
+Erzeuge ein JSON-Objekt. Beantworte Fragen basierend auf den gegebenen Kontexten und trage das richtige Ergebnis in das entsprechende Feld ein. Wenn du das Ergebnis nicht finden kannst, setze den Feldwert auf null.
+---
+Kontext: {context0}
+Frage: {question0}
+Feld: {field0}
+---
+Kontext: {context1}
+Frage: {question1}
+Feld: {field1}
+---
+Kontext: {context2}
+Frage: {question2}
+Feld: {field2}
+---
+Kontext: {context3}
+Frage: {question3}
+Feld: {field3}
+---
+Kontext: {context4}
+Frage: {question4}
+Feld: {field4}
+---
 ASSISTANT:{target}</s>"""  # noqa: E501
 
 
@@ -165,12 +180,10 @@ def _create_train_prompt(
     document: str, target: str, orig_json: Dict[str, Union[str, List[str]]]
 ) -> List[str]:
     _vectorstore: Optional[VectorStore] = None
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+    documents = split_plain_text(
+        document, chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
-    texts = text_splitter.split_text(document)
-    _vectorstore = FAISS.from_texts(texts, _embeddings)
+    _vectorstore = FAISS.from_documents(documents, _embeddings)
 
     questions_dict: Dict[str, str] = {}
     parameters: Dict[str, str] = {}
@@ -180,7 +193,7 @@ def _create_train_prompt(
 
     for question in questions:
         sorted_vecs = [
-            doc.page_content
+            doc.page_content + f"\n--- Quelle: ({doc.metadata['position']})\n"
             for doc in _vectorstore.similarity_search_by_vector(
                 queries[question], k=len(_vectorstore.index_to_docstore_id)
             )
@@ -217,9 +230,8 @@ def _create_train_prompt(
     return prompt_list
 
 
-def _load_training_data() -> List[Dict]:
+def _load_training_data(data: List) -> List[Dict]:
     label_dicts: List[Dict] = []
-    data = load_labeled_data(label_filepath, raw_data_folder)
     for json_dict in data:
         # format names
         orig_json = deepcopy(json_dict)
@@ -264,8 +276,8 @@ def _load_training_data() -> List[Dict]:
 # Generate training data
 from transformers import AutoTokenizer
 
-if HAS_TRAIN_DATA:
-    training_raw_data = _load_training_data()
+if not HAS_TRAIN_DATA:
+    training_raw_data = _load_training_data(data)
     print(len(training_raw_data))
 
 # %%
