@@ -1,7 +1,7 @@
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 from pydantic import TypeAdapter
 
@@ -34,12 +34,14 @@ class GrasccoTask(LabelStudioTask[GrasccoLabel]):
 
 
 def load_labeled_data(
-    label_filepath: Path, raw_data_folder: Path
+    label_filepath: Path, raw_data_folder: Path, limit: Optional[int] = None
 ) -> List[Dict[str, Union[str, List[str]]]]:
     with open(label_filepath, "r") as f:
         label_file = TypeAdapter(List[GrasccoTask]).validate_python(json.load(f))
 
     data = []
+    if limit:
+        label_file = label_file[:limit]
     for task in label_file:
         file_name = task.file_name
         for annotation in task.annotations:
