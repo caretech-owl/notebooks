@@ -16,12 +16,9 @@ config = LoraTrainingConfig(
         "tokenizer": "jphme/em_german_leo_mistral",
         "config": {"pretrained_model_name_or_path": "jphme/em_german_leo_mistral"},
     },
-    batch_size=4,
-    micro_batch_size=1,
     stop_at_loss=-1,
-    epochs=1,
+    epochs=10,
     output_dir=SETTINGS.cache_dir.joinpath("lora").as_posix(),
-    modules=LoraModules(default=False, q=True, v=True),
     # flags=TrainingFlags(use_cpu=True)
 )
 
@@ -35,7 +32,7 @@ if HAS_TRAIN_DATA:
 
 # %%
 # Create vector embedding
-from typing import List
+from typing import Dict, List, Optional, Tuple, Union
 
 from langchain.embeddings import HuggingFaceEmbeddings
 
@@ -43,253 +40,110 @@ from langchain.embeddings import HuggingFaceEmbeddings
 chunk_size = 256
 chunk_overlap = 25
 vector_count = 3
-vector_model_name = "sentence-transformers/all-MiniLM-L6-v2"
+vector_model_name = "sentence-transformers/distiluse-base-multilingual-cased-v1"
 _embeddings = HuggingFaceEmbeddings(
     model_name=vector_model_name,
-    model_kwargs={"device": "cuda"},
+    model_kwargs={"device": "cpu"},
 )
 
 # %%
+# Load Grascco data
+from langchain.vectorstores import FAISS
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from cto_notebooks.data.grascco import load_labeled_data
+from cto_notebooks.utils.data import split_plain_text
+from cto_notebooks.utils.rag import VectorStore, average_vector
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=chunk_size,
+    chunk_overlap=chunk_overlap,
+)
+data = load_labeled_data(label_filepath, raw_data_folder)
+tests: Dict[str, Tuple[Dict[str, Union[str, List[str]]], VectorStore]] = {}
+for record in data:
+    tests[record["file_name"]] = (
+        record,
+        FAISS.from_documents(
+            split_plain_text(
+                record["text"], chunk_size=chunk_size, chunk_overlap=chunk_overlap
+            ),
+            _embeddings,
+        ),
+    )
+
+
+# %%
 # Setup prompt
+from typing import Dict, List
 
+questions: List[str] = [
+    "Wie heißt der Patient?",
+    "Wann hat der Patient Geburstag?",
+    "Wie heißt der Arzt?",
+    "Wann wurde der Patient bei uns aufgenommen?",
+    "Wann wurde der Patient bei uns entlassen?",
+]
 
-qa_analyze_prompt = """<s>Du bist ein hilfreicher Assistent. USER: \
-Kontext: {context} zu
-Frage: {question} in JSON-Feld answer.
+fields: Dict[str, str] = {
+    "Wie heißt der Patient?": "patient_name",
+    "Wann hat der Patient Geburstag?": "patient_date_of_birth",
+    "Wie heißt der Arzt?": "attending_doctors",
+    "Wann wurde der Patient bei uns aufgenommen?": "recording_date",
+    "Wann wurde der Patient bei uns entlassen?": "release_date",
+}
 
-Gebe nur die hilfreiche Antwort unten zurück und nichts anderes. \
-Halte dich außerdem sehr kurz mit der Antwort. \
+queries: Dict[str, List[float]] = {
+    k: average_vector(fields[k], embeddings=_embeddings, data_dict=tests.values())
+    for k in questions
+}
+
+qa_analyze_prompt = """<s> Du bist ein hilfreicher Assistent. USER: \
+Kontext: {context}
+Frage: {question}
+
 ASSISTANT:{target}</s>"""  # noqa: E501
-# %%
-# File type defintions
-from enum import Enum
-from typing import Dict, Iterable, Optional, Protocol
-
-from langchain.docstore.document import Document
-from pydantic import BaseModel, ConfigDict, TypeAdapter, computed_field
-
-
-class VectorStore(Protocol):
-    def merge_from(self, vector_store: "VectorStore") -> None:
-        pass
-
-    def save_local(self, path: str) -> None:
-        pass
-
-    def add_texts(
-        self,
-        texts: Iterable[str],
-    ) -> List[str]:
-        pass
-
-    def search(self, query: str, search_type: str, k: int) -> List[Document]:
-        pass
-
-
-class LabelStudioLabel(Enum):
-    Abteilung = "Abteilung"
-    Anrede = "Anrede"
-    AufnahmeDatum = "AufnahmeDatum"
-    BehandelnderArzt = "BehandelnderArzt"
-    Einrichtung = "Einrichtung"
-    EntlassDatum = "EntlassDatum"
-    Hausarzt = "Hausarzt"
-    PatientGeburtsdatum = "PatientGeburtsdatum"
-    PatientName = "PatientName"
-
-
-class LabelStudioAnnotationValue(BaseModel):
-    end: int
-    labels: List[LabelStudioLabel]
-    start: int
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioAnnotationResult(BaseModel):
-    from_name: str
-    id: str
-    origin: str
-    to_name: str
-    type: str
-    value: LabelStudioAnnotationValue
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioAnnotation(BaseModel):
-    completed_by: int
-    created_at: str
-    draft_created_at: Optional[str]
-    ground_truth: bool
-    id: int
-    import_id: Optional[str]
-    last_action: Optional[str]
-    last_created_by: Optional[int]
-    lead_time: float
-    parent_annotation: Optional[str]
-    parent_prediction: Optional[str]
-    prediction: Dict[str, str]
-    project: int
-    result_count: int
-    result: List[LabelStudioAnnotationResult]
-    task: int
-    unique_id: str
-    updated_at: str
-    updated_by: int
-    was_cancelled: bool
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LabelStudioTask(BaseModel):
-    annotations: List[LabelStudioAnnotation]
-    cancelled_annotations: int
-    comment_authors: List[str]
-    comment_count: int
-    created_at: str
-    data: Optional[Dict[str, str]]
-    drafts: List[str]
-    file_upload: str
-    id: int
-    inner_id: int
-    last_comment_updated_at: Optional[str]
-    meta: Optional[Dict[str, str]]
-    predictions: List[str]
-    project: int
-    total_annotations: int
-    total_predictions: int
-    unresolved_comment_count: int
-    updated_at: str
-    updated_by: int
-
-    @computed_field  # type: ignore[misc]
-    @property
-    def file_name(self) -> str:
-        return self.file_upload.split("-", 1)[-1]
-
-    model_config = ConfigDict(extra="forbid")
-
 
 # %%
-# define LabelStudio helper functions
+# define trainingsdata functions
 
 import json
+from copy import deepcopy
 from itertools import permutations
 
-from datasets import Dataset
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import FAISS
+from dateparser import parse
 
-
-def load_label_studio_tasks(file_path: str) -> List[LabelStudioTask]:
-    with open(file_path, "r") as f:
-        obj = json.load(f)
-
-    tasks = TypeAdapter(List[LabelStudioTask]).validate_python(obj)
-    return tasks
-
-# %% define trainingsdata functions
-import re
-from datetime import datetime
-
-
-def _convert_to_datetime(date_string: str) -> datetime:
-    if re.match(r"\d{1,2}\.\d{1,2}\.\d{4}$", date_string):
-        return datetime.strptime(date_string, "%d.%m.%Y")
-    elif re.match(r"\d{1,2}\.\d{1,2}\.\d{2}$", date_string):
-        return datetime.strptime(date_string, "%d.%m.%y")
-    elif re.match(r"\d{1,2}\-\d{1,2}\-\d{4}$", date_string):
-        return datetime.strptime(date_string, "%d-%m-%Y")
-    elif re.match(r"\d{1,2}\-\d{1,2}\-\d{2}$", date_string):
-        return datetime.strptime(date_string, "%d-%m-%y")
-    elif re.match(r"\d{1,2}/\d{1,2}/\d{4}$", date_string):
-        return datetime.strptime(date_string, "%d/%m/%Y")
-    elif re.match(r"\d{1,2}/\d{1,2}/\d{2}$", date_string):
-        return datetime.strptime(date_string, "%d/%m/%y")
-    elif re.match(r"\d{4}\-\d{2}\-\d{2}$", date_string):
-        return datetime.strptime(date_string, "%Y-%m-%d")
-
-def _replace_month_names(date : str) -> str:
-    month_dict = {"Januar": "01",
-                "Februar": "02",
-                "März": "03",
-                "April": "04",
-                "Mai": "05",
-                "Juni": "06",
-                "Juli": "07",
-                "August": "08",
-                "September": "09",
-                "Oktober": "10",
-                "November": "11",
-                "Dezember": "12"}
-
-    for month_name, month_number in month_dict.items():
-        if any(re.finditer(month_name, date)):
-            date = date.replace(" ", "")
-
-            date = date.replace("." + month_name + ".", "." + month_number + ".")
-            date = date.replace(month_name + ".", "." + month_number + ".")
-            date = date.replace("." + month_name, "." + month_number + ".")
-            date = date.replace(month_name, "." + month_number + ".")
-    return date
 
 def _format_stay_date(
-        recording_date_str: str, release_date_str: str, target_format: str = "%d.%m.%Y"
-        ) -> tuple[str, str]:
-    formatted_recording_date : str = recording_date_str
-    formatted_release_date : str = release_date_str
-    recording_date : datetime = None
-    release_date : datetime = None
+    recording: str, release: str
+) -> Tuple[Optional[str], Optional[str]]:
+    rec_date = rel_date = None
+    if release:
+        tmp = parse(release, languages=["de"], date_formats=["%Y-%m-%d"])
+        if tmp is None:
+            msg = f"Could not parse date from {release}!"
+            raise AssertionError(msg)
+        rel_date = tmp.strftime("%d.%m.%Y")
+    if recording:
+        tmp = parse(
+            recording,
+            languages=["de"],
+            date_formats=["%Y-%m-%d"],
+            settings={"RELATIVE_BASE": tmp},
+        )
+        if tmp is None:
+            msg = f"Could not parse date from {recording}!"
+            raise AssertionError(msg)
+        rec_date = tmp.strftime("%d.%m.%Y")
+    return rec_date, rel_date
 
-    formatted_recording_date = _replace_month_names(
-        formatted_recording_date
-        ).replace(" ", "")
-    formatted_release_date = _replace_month_names(
-        formatted_release_date
-        ).replace(" ", "")
-
-    if not formatted_recording_date.isspace() and  formatted_recording_date != "":
-        recording_date = _convert_to_datetime(formatted_recording_date)
-        if recording_date is not None:
-            formatted_recording_date = recording_date.strftime(target_format)
-
-    if not formatted_release_date.isspace() and  formatted_release_date != "":
-        release_date = _convert_to_datetime(formatted_release_date)
-        if release_date is not None:
-            formatted_release_date = release_date.strftime(target_format)
-
-    if recording_date is None and release_date is not None:
-        if re.match(r"\d{1,2}\.\d{1,2}\.", formatted_recording_date):
-            formatted_recording_date = formatted_recording_date + str(release_date.year)
-            recording_date = _convert_to_datetime(formatted_recording_date)
-            if recording_date is not None and recording_date <= release_date:
-                    formatted_recording_date = recording_date.strftime(target_format)
-        elif re.match(r"\d{1,2}\.", formatted_recording_date):
-            formatted_recording_date = (formatted_recording_date
-                                        + str(release_date.month)
-                                        + "." + str(release_date.year))
-            recording_date = _convert_to_datetime(formatted_recording_date)
-            if recording_date is not None and recording_date <= release_date:
-                    formatted_recording_date = recording_date.strftime(target_format)
-    return (formatted_recording_date, formatted_release_date)
 
 def _format_patient_date_of_birth(
-        patient_date_of_birth_str: str, target_format: str = "%d.%m.%Y"
-        ) -> str:
-    formatted_patient_date_of_birth = _replace_month_names(
-        patient_date_of_birth_str
-        ).replace(" ", "")
+    date_str: str, target_format: str = "%d.%m.%Y"
+) -> Optional[str]:
+    date = parse(date_str, languages=["de"], date_formats=["%Y-%m-%d"])
+    return date.strftime(target_format) if date else None
 
-    if (not formatted_patient_date_of_birth.isspace()
-        and  formatted_patient_date_of_birth != ""):
-        patient_date_of_birth = _convert_to_datetime(formatted_patient_date_of_birth)
-        if patient_date_of_birth is not None:
-            formatted_patient_date_of_birth = patient_date_of_birth.strftime(
-                target_format
-                )
-
-    return formatted_patient_date_of_birth
 
 def _format_patient_name(name: str) -> str:
     if name.find(", ") != -1:
@@ -298,142 +152,84 @@ def _format_patient_name(name: str) -> str:
             name = words[1] + " " + words[0]
     return name.strip()
 
-def _replace_with_german_filenames(file_name: str) -> str:
-    german_file_names: Dict[str, str] = {
-        "Waldenstrom.txt": "Waldenström.txt",
-        "Stolzl.txt": "Stölzl.txt",
-    }
 
-    if file_name in german_file_names:
-        return german_file_names[file_name]
-    return file_name
-
-
-def _create_train_prompt(document: str, target_dict: str) -> str:
+def _create_train_prompt(
+    document: str,
+    target: Union[str, List[str]],
+    orig_json: Dict[str, Union[str, List[str]]],
+) -> str:
     _vectorstore: Optional[VectorStore] = None
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+    documents = split_plain_text(
+        document, chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
-    texts = text_splitter.split_text(document)
-    _vectorstore = FAISS.from_texts(texts, _embeddings)
-
-    questions: List[str] = [
-        "Wie heißt der Patient?",
-        "Wann hat der Patient Geburstag?",
-        "Wie heißt der Arzt?",
-        "Wann wurde der Patient bei uns aufgenommen?",
-        "Wann wurde der Patient bei uns entlassen?",
-    ]
-    fields: Dict[str, str] = {
-        "Wie heißt der Patient?": "patient_name",
-        "Wann hat der Patient Geburstag?": "patient_date_of_birth",
-        "Wie heißt der Arzt?": "attending_doctor",
-        "Wann wurde der Patient bei uns aufgenommen?": "recording_date",
-        "Wann wurde der Patient bei uns entlassen?": "release_date",
-    }
+    _vectorstore = FAISS.from_documents(documents, _embeddings)
 
     parameters: Dict[str, str] = {}
     prompt_list: List[(str, str)] = []
 
     for question in questions:
-        parameters["target"] = ("{question: "
-                                + str(question) + ", answer: "
-                                + str(target_dict[fields[question]]) + "}")
-
-        context = [
+        parameters["target"] = json.dumps(
+            {
+                "question": question,
+                "answer": target[fields[question]],
+            }
+        )
+        sorted_vecs = [
             doc.page_content
-            for doc in _vectorstore.search(
-                question, search_type="similarity", k=vector_count
+            for doc in _vectorstore.similarity_search_by_vector(
+                queries[question], k=len(_vectorstore.index_to_docstore_id)
             )
         ]
+        vals = orig_json[fields[question]]
+        if isinstance(vals, str):
+            vals = [vals]
+        while not all(val in "".join(sorted_vecs[:vector_count]) for val in vals):
+            sorted_vecs.pop(0)
 
-        for perm_context in permutations(context):
+        for perm_context in permutations(sorted_vecs[:vector_count]):
             parameters["context"] = " ".join(perm_context)
             parameters["question"] = question
             prompt_list.append(
                 (parameters["target"], qa_analyze_prompt.format(**parameters))
-                )
+            )
     return prompt_list
 
 
-def _load_training_data() -> List[Dict]:
-    label_file = load_label_studio_tasks(label_filepath)
+def _load_training_data(data: List) -> List[Dict]:
     label_dicts: List[Dict] = []
-    fields: Dict[str, str] = {
-        "PatientName": "patient_name",
-        "PatientGeburtsdatum": "patient_date_of_birth",
-        "BehandelnderArzt": "attending_doctor",
-        "AufnahmeDatum": "recording_date",
-        "EntlassDatum": "release_date",
-    }
+    for orig_json in data:
+        # format names
+        json_dict = deepcopy(orig_json)
+        json_dict["patient_name"] = json_dict["patient_name"].replace("\n", " ")
+        json_dict["attending_doctors"] = [
+            doc.replace("\n", " ") for doc in json_dict["attending_doctors"]
+        ]
 
-    for task in label_file:
-        file_name = _replace_with_german_filenames(task.file_name)
+        json_dict["patient_name"] = _format_patient_name(json_dict["patient_name"])
 
-        for annotation in task.annotations:
-            if file_name not in exclude_from_training:
-                with open(
-                    raw_data_folder.joinpath(file_name), encoding="utf-8-sig"
-                ) as document_file:
-                    document = document_file.read()
+        # format dates
+        json_dict["patient_date_of_birth"] = _format_patient_date_of_birth(
+            json_dict["patient_date_of_birth"]
+        )
 
-                json_dict: Dict[str, str] = {
-                    "patient_name": "",
-                    "patient_date_of_birth": "",
-                    "attending_doctor": "",
-                    "recording_date": "",
-                    "release_date": "",
-                }
-                for res in annotation.result:
-                    label = res.value.labels[0]
-                    start = res.value.start
-                    end = res.value.end
-                    value = document[start:end]
-                    if str(label.name) in fields:
-                        if (json_dict[fields[str(label.name)]] != ""
-                        and fields[str(label.name)] == "attending_doctor"):
-                            json_dict[fields[str(label.name)]] = json_dict[
-                                fields[str(label.name)]
-                                ] + ", " + value
-                        else:
-                            json_dict[fields[str(label.name)]] = value
+        formatted_dates = _format_stay_date(
+            json_dict["recording_date"], json_dict["release_date"]
+        )
 
-                # format names
-                json_dict["patient_name"] = json_dict[
-                    "patient_name"
-                    ].replace("\n", " ")
-                json_dict["attending_doctor"] = json_dict[
-                    "attending_doctor"
-                    ].replace("\n", " ")
+        json_dict["recording_date"] = formatted_dates[0]
+        json_dict["release_date"] = formatted_dates[1]
+        document = json_dict["text"]
 
-                json_dict["patient_name"] = _format_patient_name(
-                    json_dict["patient_name"]
-                    )
+        del json_dict["file_name"]
+        del json_dict["text"]
 
-                # format dates
-                json_dict["patient_date_of_birth"] = _format_patient_date_of_birth(
-                    json_dict["patient_date_of_birth"]
-                    )
+        prompt_list = _create_train_prompt(document, json_dict, orig_json)
 
-                formatted_dates = _format_stay_date(
-                    json_dict["recording_date"],
-                    json_dict["release_date"]
-                    )
-
-                json_dict["recording_date"] = formatted_dates[0]
-                json_dict["release_date"] = formatted_dates[1]
-
-                #target = json.dumps(json_dict)
-
-                prompt_list = _create_train_prompt(document, json_dict)
-
-                for prompt in prompt_list:
-                    label_dict: Dict[str, str] = {}
-                    label_dict["target"] = prompt[0]
-                    label_dict["instruct"] = prompt[1]
-
-                    label_dicts.append(label_dict)
+        for prompt in prompt_list:
+            label_dict: Dict[str, str] = {}
+            label_dict["target"] = prompt[0]
+            label_dict["instruct"] = prompt[1]
+            label_dicts.append(label_dict)
 
     return label_dicts
 
@@ -443,7 +239,7 @@ def _load_training_data() -> List[Dict]:
 from transformers import AutoTokenizer
 
 if not HAS_TRAIN_DATA:
-    training_raw_data = _load_training_data()
+    training_raw_data = _load_training_data(data)
     print(len(training_raw_data))
 
 # %%
