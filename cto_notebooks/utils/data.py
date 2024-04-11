@@ -2,7 +2,31 @@ import re
 from typing import Dict, Generator, List
 
 import torch
+from langchain.docstore.document import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import PreTrainedTokenizer
+
+
+def split_plain_text(txt: str, chunk_size: int, chunk_overlap: int) -> List[Document]:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    )
+    res = []
+    txts = splitter.split_text(txt)
+    for substring in txts:
+        pos = txt.index(substring)
+        col = 0
+        line = 0
+        for c in txt[:pos]:
+            if c == "\n":
+                line += 1
+                col = 0
+            else:
+                col += 1
+        res.append(
+            Document(page_content=substring, metadata={"position": f"{line}:{col}"})
+        )
+    return res
 
 
 def split_chunks(
