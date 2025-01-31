@@ -15,6 +15,7 @@ def _init_config() -> Config:
     cache_dir = Path.resolve(Path(__file__ + "/../../../cache/"))
     model_dir = Path.resolve(Path(__file__ + "/../../../models/"))
     data_dir = Path.resolve(Path(__file__ + "/../../../data/"))
+    cache_dir.mkdir(exist_ok=True)
     cache_hub_dir = cache_dir.joinpath("hub")
     model_dir.mkdir(exist_ok=True)
     cache_hub_dir.mkdir(parents=True, exist_ok=True)
